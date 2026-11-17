@@ -1,73 +1,87 @@
 # PCB component finder
 
-Turns a PCBA approval-sheet PDF into one HTML page where you
-type a designator (R43, C5, TP33), a value (100K) or a part number and see where the part
-sits on the board drawing, on the real photo and on the schematic.
+Turns a PCBA PDF (approval sheet or CAD layout print) into one HTML page. Type a designator
+(R43, C5, TP33), a value (100nF) or a part number, and the page zooms to **the name printed on
+the PCB** and marks it, on the board drawing, on the real-board photo (if the PDF has one) and on
+the schematic (if the PDF has one).
 
 Nothing is uploaded anywhere. The result is a single HTML file you can open offline or send to a colleague.
 
-## Use it
+## Install (once)
 
-1. On GitHub click **Code > Download ZIP**, then unzip the folder anywhere on the Windows laptop (Python must be installed).
-2. Drag the PDF onto **run.bat**.
-   The first run installs five Python packages with pip; later runs skip that.
-3. After about 15 seconds the page opens in your browser. It is saved next to the PDF as
-   `<PDF name> - component finder.html`.
+1. **Python 3.9 or newer** (already on the company laptop).
+2. **Tesseract OCR**, used to read labels that the PDF draws as lines:
+   - download the Windows installer from <https://github.com/UB-Mannheim/tesseract/wiki>
+   - run it; "Install just for me" works without admin rights
+   - the tool finds it in the usual install folders, no PATH change needed.
+     A portable copy in a folder named `Tesseract-OCR` next to `build.py` also works.
+3. The Python packages are installed by `run.bat` on first use (`pip install --user -r requirements.txt`).
+
+## Use
+
+Drag the PDF onto **run.bat**. After 1-2 minutes the page opens in your browser. It is saved next
+to the PDF as `<PDF name> - component finder.html`.
 
 Without the .bat file: `python build.py "C:\path\to\file.pdf"`
 
-## Check the positions (10-15 minutes per new board)
+The window shows what it found, for example:
 
-The tool reads every printed label exactly, but it has to guess which outline belongs to
-each label. On a crowded board many guesses are wrong, so each part gets a coloured dot:
+    2/5 reading the labels on the layout pages ...
+      page 17: 118 labels (111 in BOM)
+      page 18: 67 labels (64 in BOM)
+    DONE
+      178 of 180 BOM designators located
+      BOM designators whose label was not found: L2, TVS5
 
-| Dot | Meaning |
-|---|---|
-| dark green | you checked it |
-| light green | outline next to its own label, safe in almost all cases |
-| orange | outline guessed, may be a neighbour: check it |
-| red | no outline matched, only the printed label is marked |
+Parts listed as "not found" are still searchable on the page: it shows their BOM values and their
+place on the schematic, and says that the label was not found on the board drawing.
 
-To make the page fully correct:
+## What the page shows
 
-1. Click **Check positions**. The tool walks through the orange and red parts.
-2. If the red box is on the right part, press **Enter**.
-   If not, click the right outline (blue boxes). If there is no blue box, hold **Shift** and drag one.
-3. Click **Save corrections...**. A file `<PDF name>.fixes.json` is downloaded.
-4. Move that file into the same folder as the PDF and drag the PDF onto run.bat again.
-   Every checked part now shows a dark green dot. You can repeat this any time; earlier checks are kept.
+- **Red box**: the designator as printed on the PCB. This position is read from the PDF itself, so it is exact.
+- **Blue dashed box** (sometimes): the part next to the label, shown only where that is clear.
+- Board drawing / Real photo / Schematic buttons switch the view; Top side / Bottom side switch the side.
+- Click any label on the board to see what that part is.
 
-## What to expect on a new PDF
+## How it reads the labels
 
-Measured on one two-sided test board (about 160 parts on top, 85 test points on the bottom):
+The tool handles three kinds of PDF and picks the right one per page by itself:
 
-| Step | Result |
-|---|---|
-| Labels found on the board | 243, including all 137 BOM designators |
-| Bottom side (test points) | 82 of 85 outlines right without any checking |
-| Top side (components) | 85 of 157 outlines right, 33 wrong, 39 label only, before checking |
-| Top side, light-green parts only | 40 of 44 right |
-| Photo alignment | within about 0.7 mm |
+| The PDF stores the labels as | Example | How they are read |
+|---|---|---|
+| Hidden CAD text over drawn letters | Altium print (battery pack PCBA) | name from the CAD text, box from the drawn letters under it |
+| Lines only (no text) | GCE / CSMCN approval sheets (3B, 4A) | redrawn upright, read by Tesseract, checked against the BOM |
+| Real text | some CAD exports | taken as is |
 
-So on the component side expect roughly half of the outlines to need a click. The printed
-label is marked correctly either way, which is already enough to find a part by eye.
+Then it picks the layout page of each board side (the plain silkscreen page, not combined-layer views)
+and reads the BOM table from the table lines in the PDF.
 
-## When it will not work
+## Results on the example files
 
-- The PCB layout pages must be vector drawings (the PDF shows them sharp at any zoom).
-  Scanned or photographed layouts have no labels to read.
-- The label letters must be the same CAD line font as in the board this tool was built on. A different CAD
-  tool may draw letters differently; then few labels are found and the tool says so.
-  Letters I, J, O and Y were not present on that board and may be misread.
-- The BOM is read by column position from a table with the headers `Item` and `Designator`.
-  If the BOM is missing or laid out differently, the page still works but shows no values.
-- The photo is used only when the tool finds a green board whose shape matches the drawing.
-  It assumes the photo is not rotated relative to the drawing.
-- If the first photo on the picture page is the bottom side, the two photos are swapped.
+| PDF | Labels located | BOM parts located |
+|---|---|---|
+| 3B main PCBA (2 sides + photos) | 237 | 134 of 137 |
+| 4A main PCBA (2 sides) | 182 | 178 of 180 |
+| Battery pack PCBA (Altium, no BOM) | 35 | (no BOM in the PDF) |
+
+On the 3B board all 158 top-side labels were checked against a hand-made list: 153 right, 1 wrong
+(an unlisted part read as L64 instead of R97) and 4 missed (C35 and C37 printed touching, lower-case
+"Fuse1", and the unlisted C27). All 83 bottom-side test points were right.
+
+## Limits
+
+- Layout pages must be vector drawings (sharp at any zoom). Scanned pages cannot be read.
+- Labels printed on top of each other, or touching other text, may be missed or merged.
+- Without a BOM in the PDF, only names with a usual designator form (letters then a number) are kept.
+- The photo is used only when a green board of the same shape as the drawing is found; the mark on the
+  photo can be off by about 1 mm.
 
 ## Files
 
 - `build.py` - the command you run
-- `pcbfinder/core.py` - reading the PDF (BOM, labels, outlines, photos, schematic)
-- `pcbfinder/glyphs.npz` - shapes of the label letters
+- `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
+- `pcbfinder/seg.py` - cutting drawn lines into letters and words
+- `pcbfinder/ocr.py` - Tesseract calls
+- `pcbfinder/bom.py` - reading the BOM table
+- `pcbfinder/board.py` - board outline, part outlines, photos, schematic
 - `pcbfinder/template.html` - the page

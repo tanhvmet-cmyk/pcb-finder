@@ -1,284 +1,8 @@
-"""
-PCB component finder - core.
-
-Reads a PCBA approval-sheet PDF and works out, without OCR:
-  1. the BOM table (designator -> value, package, part number)
-  2. the silkscreen pages (top / bottom) and every designator label drawn on them
-  3. the component outline that belongs to each label
-  4. where the board sits in the "real picture" photos
-  5. where each designator is written on the schematic pages
-"""
-import os, re, json, math
+"""Board outline, component outlines, real-board photos and schematic hits."""
+import re, math
 import numpy as np
 import cv2
 import pymupdf
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-_G = np.load(os.path.join(HERE, "glyphs.npz"))
-G_IMGS = [(g > 0) for g in _G["imgs"]]
-G_CHARS = [str(c) for c in _G["chars"]]
-GW, GH = 20, 28
-
-# designator prefixes accepted even when the BOM does not list the part
-PREFIXES = ("TVS", "Fuse", "FUSE", "LED", "CN", "TH", "TP", "SW", "FB", "BT", "IC", "RV", "NTC",
-            "R", "C", "D", "Q", "U", "L", "E", "Z", "F", "J", "K", "T", "X", "Y", "P", "M")
-PAT = re.compile(r"(?:%s)(?:[0-9]|\|(?![A-Za-z?]))+" % "|".join(PREFIXES))
-MAX_GLYPH_PT = 3.6      # label letters are smaller than this (PDF points)
-
-
-def log(*a):
-    print(*a, flush=True)
-
-
-# ----------------------------------------------------------------- BOM
-def parse_bom(doc):
-    """Find pages with a BOM table and read it by column position."""
-    items, last_head = [], None
-    for pn in range(len(doc)):
-        ws = doc[pn].get_text("words")
-        head = {}
-        for w in ws:
-            t = w[4].strip().lower()
-            if t in ("item", "designator", "description", "qty", "component", "package", "unit") and t not in head:
-                head[t] = w
-            if t == "manufacturer":
-                head.setdefault("mfr", w)
-            if t == "p/n":
-                head.setdefault("pn", w)
-        if "item" not in head or "designator" not in head:
-            nxt = items[-1]["item"] + 1 if items else None
-            if last_head is None or not any(abs(w[0] - last_head["item"][0]) < 14 and w[4] == str(nxt) for w in ws):
-                continue
-            head = dict(last_head)
-            head["item"] = (head["item"][0], -10, 0, 0, "Item")      # no header row on this page
-        last_head = head
-        hy = head["item"][1]
-        hx = lambda k, d: head[k][0] if k in head else d
-        x_item = head["item"][0]
-        x_comp = hx("component", x_item + 25)
-        x_pkg = hx("package", x_comp + 55) - 16          # header reads "Device Package"
-        x_desc = hx("description", x_pkg + 55)
-        x_unit = hx("unit", x_desc + 50)
-        x_mfr = hx("mfr", x_unit + 45)
-        x_pn = hx("pn", x_mfr + 85) - 28                 # header reads "Manufacturer P/N"
-        x_qty = hx("qty", head["designator"][0] - 30)
-        x_des = (x_qty + head["designator"][0]) / 2
-        b_pkg = (x_comp + 22 + x_pkg) / 2
-        b_desc = x_desc - 22
-        b_unit = x_unit - 3
-        b_mfr = x_mfr - 28
-        b_pn = x_pn - 6
-        b_end = x_pn + 62
-        rows = sorted((w[1], int(w[4])) for w in ws
-                      if abs(w[0] - x_item) < 14 and re.fullmatch(r"\d+", w[4]) and w[1] > hy + 2)
-        for k, (y, n) in enumerate(rows):
-            y0 = y - 9
-            y1 = rows[k + 1][0] - 9 if k + 1 < len(rows) else 1e9
-            blk = [w for w in ws if y0 <= w[1] < y1]
-
-            def col(a, b):
-                sel = sorted([w for w in blk if a <= w[0] < b and abs(w[1] - y) < 7],
-                             key=lambda w: (round(w[1] / 3), w[0]))
-                return " ".join(w[4] for w in sel)
-            des = "".join(w[4] for w in sorted([w for w in blk if w[0] >= x_des],
-                                                key=lambda w: (round(w[1]), w[0])))
-            items.append(dict(item=n, comp=col(x_item + 12, b_pkg), pkg=col(b_pkg, b_desc),
-                              desc=re.sub(r"\s*-\s*", "-", col(b_desc, b_unit)),
-                              mfr=col(b_mfr, b_pn), pn=re.sub(r"\s+-", "-", col(b_pn, b_end)),
-                              des=des, page=pn + 1))
-    info = {}
-    for b in items:
-        for x in re.split(r"[,/;]", b["des"]):
-            x = x.strip()
-            if re.fullmatch(r"[A-Za-z]+\d+", x):
-                info[x] = {k: b[k] for k in ("item", "comp", "pkg", "desc", "mfr", "pn", "page")}
-    return info, sorted({b["page"] for b in items})
-
-
-# ----------------------------------------------------------------- labels (stroke-font text)
-def text_paths(page):
-    out = []
-    for i, x in enumerate(page.get_drawings()):
-        if x["type"] != "s" or any(it[0] != "l" for it in x["items"]):
-            continue
-        segs = [((it[1].x, it[1].y), (it[2].x, it[2].y)) for it in x["items"]]
-        xs = [p[0] for s in segs for p in s]
-        ys = [p[1] for s in segs for p in s]
-        bb = (min(xs), min(ys), max(xs), max(ys))
-        if max(bb[2] - bb[0], bb[3] - bb[1]) > MAX_GLYPH_PT:
-            continue
-        out.append(dict(i=i, w=round(x["width"] or 0, 3), segs=segs, bb=bb))
-    return out
-
-
-def strings(paths):
-    S, cur = [], None
-    for p in paths:
-        h = max(9 * p["w"], 1.6)
-        if cur and cur["w"] == p["w"] and p["i"] - cur["last"] <= 3:
-            b = cur["bb"]
-            dx = max(b[0] - p["bb"][2], p["bb"][0] - b[2], 0)
-            dy = max(b[1] - p["bb"][3], p["bb"][1] - b[3], 0)
-            if max(dx, dy) < 0.75 * h:
-                cur["paths"].append(p)
-                cur["last"] = p["i"]
-                cur["bb"] = (min(b[0], p["bb"][0]), min(b[1], p["bb"][1]), max(b[2], p["bb"][2]), max(b[3], p["bb"][3]))
-                continue
-        cur = dict(w=p["w"], paths=[p], bb=p["bb"], last=p["i"])
-        S.append(cur)
-    return S
-
-
-def _lines(paths, rot):
-    ax = (1, 3) if rot == 0 else (0, 2)
-    L, cur, hi = [], None, None
-    for p in sorted(paths, key=lambda p: p["bb"][ax[0]]):
-        if cur is not None and p["bb"][ax[0]] < hi - 0.15:
-            cur.append(p)
-            hi = max(hi, p["bb"][ax[1]])
-        else:
-            cur = [p]
-            L.append(cur)
-            hi = p["bb"][ax[1]]
-    return L
-
-
-def _classify(img):
-    a = img > 0
-    best, bs = "?", 0.0
-    for g, c in zip(G_IMGS, G_CHARS):
-        v = (a & g).sum() / max(1, (a | g).sum())
-        if v > bs:
-            bs, best = v, c
-    return best if bs >= 0.6 else "?"
-
-
-def _decode(paths, rot):
-    def up(p):
-        return (p[0], p[1]) if rot == 0 else (-p[1], p[0])
-    items = []
-    for p in paths:
-        sg = [(up(a), up(c)) for a, c in p["segs"]]
-        us = [q[0] for g in sg for q in g]
-        items.append([min(us), max(us), sg, p["bb"]])
-    items.sort(key=lambda t: t[0])
-    allv = [q[1] for it in items for sg in it[2] for q in sg]
-    v0 = min(allv)
-    Hs = max(allv) - v0
-    if Hs < 0.8:
-        return None
-    groups = []
-    for it in items:
-        if groups and it[0] < groups[-1][1] + 0.06 * Hs:
-            g = groups[-1]
-            g[1] = max(g[1], it[1])
-            g[2] += it[2]
-            g[3].append(it[3])
-        else:
-            groups.append([it[0], it[1], list(it[2]), [it[3]]])
-    text, cbb = "", []
-    sc = (GH - 5) / Hs
-    for g in groups:
-        img = np.zeros((GH, GW), np.uint8)
-        for a, c in g[2]:
-            cv2.line(img, (int(round((a[0] - g[0]) * sc)) + 2, int(round((a[1] - v0) * sc)) + 2),
-                     (int(round((c[0] - g[0]) * sc)) + 2, int(round((c[1] - v0) * sc)) + 2), 255, 2)
-        text += "." if (img > 0).sum() < 40 else _classify(img)
-        b = g[3]
-        cbb.append((min(x[0] for x in b), min(x[1] for x in b), max(x[2] for x in b), max(x[3] for x in b)))
-    return text, cbb
-
-
-def _whole_matches(t):
-    """Designators only when the whole word is made of them: 'C35C37' yes, 'ABC7' or 'XY200RF' no."""
-    out = []
-    for w in re.finditer(r"[A-Za-z0-9|?]+", t):
-        pos, ms, word = 0, [], w.group()
-        while pos < len(word):
-            m = PAT.match(word, pos)
-            if not m:
-                ms = []
-                break
-            ms.append(m)
-            pos = m.end()
-        for m in ms:
-            class M:                       # shift match positions back into the full string
-                def __init__(s_, m): s_._m = m
-                def start(s_): return s_._m.start() + w.start()
-                def end(s_): return s_._m.end() + w.start()
-                def group(s_): return s_._m.group()
-            out.append(M(m))
-    return out
-
-
-def _score(t):
-    return sum(len(m.group()) for m in _whole_matches(t)) - 0.5 * t.count("?")
-
-
-def page_labels(page):
-    """All designator labels on a vector page: [{name, bb, rot}], plus bboxes of every text string."""
-    labels, allbb = [], []
-    for s in strings(text_paths(page)):
-        if len(s["paths"]) < 2:
-            continue
-        best = None
-        for rot in (0, 90):
-            cand = []
-            for ln in _lines(s["paths"], rot):
-                if len(ln) < 2:
-                    continue
-                d = _decode(ln, rot)
-                if d:
-                    cand.append(d + (rot,))
-            sc = sum(_score(c[0]) for c in cand)
-            if best is None or sc > best[0]:
-                best = (sc, cand)
-        for t, cbb, rot in best[1]:
-            if sum(ch.isalnum() for ch in t) >= 3 and "?" not in t and "." not in t:
-                allbb.append((min(c[0] for c in cbb), min(c[1] for c in cbb), max(c[2] for c in cbb), max(c[3] for c in cbb)))
-            for m in _whole_matches(t):
-                cb = cbb[m.start():m.end()]
-                allbb.append((min(c[0] for c in cb), min(c[1] for c in cb), max(c[2] for c in cb), max(c[3] for c in cb)))
-                labels.append(dict(name=m.group().replace("|", "1"),
-                                   bb=(min(c[0] for c in cb), min(c[1] for c in cb), max(c[2] for c in cb), max(c[3] for c in cb)),
-                                   rot=rot))
-    return labels, allbb
-
-
-# ----------------------------------------------------------------- find the silkscreen pages
-def find_silk_pages(doc, bom):
-    """Vector-only pages that carry designator labels. Returns [(page_index, labels, textbbs)] top first."""
-    cands = []
-    for pn in range(len(doc)):
-        pg = doc[pn]
-        if len(pg.get_text("words")) > 40:
-            continue
-        try:
-            nd = len(pg.get_drawings())
-        except Exception:
-            continue
-        if nd < 300:
-            continue
-        labs, allbb = page_labels(pg)
-        # keep one label per name (the first), drop obvious noise
-        seen, uniq = set(), []
-        for l in labs:
-            if l["name"] not in seen:
-                seen.add(l["name"])
-                uniq.append(l)
-        if len(uniq) >= 8:
-            cands.append(dict(pn=pn, labels=labs, allbb=allbb, nd=nd, names=seen))
-            log(f"  page {pn+1}: {len(uniq)} labels, {nd} drawing objects")
-    groups = []
-    for c in sorted(cands, key=lambda c: c["nd"]):          # fewest drawings first = pure silkscreen
-        for g in groups:
-            inter = len(c["names"] & g["names"]) / max(1, min(len(c["names"]), len(g["names"])))
-            if inter > 0.6:
-                break
-        else:
-            groups.append(c)
-    groups.sort(key=lambda g: -sum(1 for n in g["names"] if n in bom) if bom else -len(g["names"]))
-    return groups[:2]
 
 
 def board_clip(page, labels):
@@ -497,17 +221,31 @@ def photo_homography(board, quad, img_shape):
 
 # ----------------------------------------------------------------- schematic
 def find_schematic(doc, names, skip_pages):
+    """where each designator is written in dark, readable text on the schematic pages"""
     hits, per_page = {}, {}
     up = {n.upper(): n for n in names}
     for pn in range(len(doc)):
         if pn + 1 in skip_pages:
             continue
-        ws = doc[pn].get_text("words")
         got = []
-        for w in ws:
-            t = w[4].strip(",;:()").upper()
-            if t in up:
-                got.append((up[t], w[:4]))
+        try:
+            d = doc[pn].get_text("dict")
+        except Exception:
+            continue
+        for blk in d.get("blocks", []):
+            for ln in blk.get("lines", []):
+                for sp in ln.get("spans", []):
+                    c = sp.get("color", 0)
+                    r, g, b = (c >> 16) & 255, (c >> 8) & 255, c & 255
+                    if 0.299 * r + 0.587 * g + 0.114 * b > 190 or sp.get("size", 0) < 2.5:
+                        continue                        # pale or tiny text (layer prints, notes): not readable
+                    for w in re.finditer(r"[^\s,;:()]+", sp["text"]):
+                        t = w.group().upper()
+                        if t in up:
+                            x0, y0, x1, y1 = sp["bbox"]
+                            n = len(sp["text"]) or 1
+                            cw = (x1 - x0) / n
+                            got.append((up[t], (x0 + cw * w.start(), y0, x0 + cw * w.end(), y1)))
         if len({g[0] for g in got}) >= 10:
             per_page[pn] = got
     for pn, got in per_page.items():

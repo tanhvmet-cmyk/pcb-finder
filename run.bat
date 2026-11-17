@@ -7,7 +7,7 @@ set PDF=%PDF:"=%
 python -c "import pymupdf, cv2, scipy, PIL, numpy" 2>nul
 if errorlevel 1 (
   echo First run: installing the Python packages this tool needs...
-  python -m pip install -r requirements.txt
+  python -m pip install --user -r requirements.txt
 )
 python build.py "%PDF%"
 echo.
