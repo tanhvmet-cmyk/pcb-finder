@@ -35,6 +35,29 @@ The window shows what it found, for example:
 Parts listed as "not found" are still searchable on the page: it shows their BOM values and their
 place on the schematic, and says that the label was not found on the board drawing.
 
+## Using it on a new PDF
+
+It works when the new PDF is of the same kinds as the examples:
+
+- the layout pages are vector drawings (sharp at any zoom);
+- the designators are drawn as lines or carried as text in the PDF (the tool decides per page);
+- ideally there is a BOM table with "Item" and "Designator" columns (names are then checked against it).
+
+Check the last lines of the window: "x of y BOM designators located" and the list of names not found.
+If that number is unusually low, or the tool stops with "no layout page", the PDF is of a new kind and the
+tool needs adjusting for it.
+
+### Hướng dẫn nhanh (tiếng Việt)
+
+1. Kéo file PDF vào `run.bat`. Lần đầu tool tự cài thư viện; các lần sau chạy luôn (1-2 phút/file).
+2. Trang kết quả mở trong trình duyệt và được lưu cạnh file PDF: `<tên PDF> - component finder.html`.
+3. Gõ tên linh kiện (R43, C5, TP33...), khung đỏ là chỗ in tên đó trên PCB.
+4. Xem cuối cửa sổ: "x of y BOM designators located". Nếu số này thấp bất thường hoặc tool báo
+   "STOP: no layout page", PDF đó là kiểu mới và cần chỉnh tool.
+
+Chạy tốt: bản vẽ dạng vector, có bảng BOM. Không đọc được: bản vẽ là ảnh scan. Có thể sót: tên in chồng
+lên nhau hoặc dính vào chữ khác.
+
 ## What the page shows
 
 - **Red box**: the designator as printed on the PCB. This position is read from the PDF itself, so it is exact.
