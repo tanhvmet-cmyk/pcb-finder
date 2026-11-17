@@ -57,11 +57,11 @@ def build(pdf, out=None, open_after=True):
     log(f"Reading {os.path.basename(pdf)} ({len(doc)} pages)")
 
     from pcbfinder import ocr
-    if ocr.tesseract():
-        log("    OCR: " + ocr.tesseract())
+    if ocr.available():
+        log("    OCR: " + ocr.describe())
     else:
-        log("    NOTE: Tesseract OCR is not installed. Labels drawn as lines cannot be read; only PDFs that")
-        log("          carry the names as text (e.g. Altium prints) will work. See README > Install.")
+        log("    NOTE: no OCR engine found (run: python -m pip install --user tesserocr). Labels drawn as lines")
+        log("          cannot be read; only PDFs that carry the names as text (e.g. Altium prints) will work.")
     log("1/5 BOM table ...")
     bom, bom_pages = bomlib.parse_bom(doc)
     log(f"    {len(bom)} designators in the BOM (pages {bom_pages})" if bom else "    no BOM table found - continuing without part values")
@@ -71,7 +71,7 @@ def build(pdf, out=None, open_after=True):
     if not pages:
         from pcbfinder import ocr
         sys.exit("STOP: no layout page with component labels was found in this PDF." +
-                 ("" if ocr.tesseract() else "\nTesseract OCR is not installed - install it (README > Install) and run again."))
+                 ("" if ocr.available() else "\nThe OCR engine is missing: run  python -m pip install --user tesserocr  and try again."))
     sides = ["top", "bottom"][:len(pages)]
 
     log("3/5 board outline, photos ...")

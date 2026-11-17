@@ -169,7 +169,7 @@ def text_labels(page, strs, namer):
     if pend:
         ks = sorted({k for _, ii in pend for k in ii})
         reads = {}
-        have_ocr = ocr.tesseract() is not None
+        have_ocr = ocr.available()
         if ks and have_ocr:
             got = ocr.read_all([strs[k] for k in ks]) or [""] * len(ks)
             reads = dict(zip(ks, got))
@@ -215,8 +215,7 @@ def ocr_labels(strs, namer, mirror=False, vote=True):
     if texts is None:
         if not _WARNED:
             _WARNED.append(1)
-            print("  WARNING: Tesseract OCR was not found, so labels drawn as lines cannot be read. "
-                  "Install it (see README) and run again.", flush=True)
+            print("  WARNING: no OCR engine, so labels drawn as lines cannot be read.", flush=True)
         return [], 0
     # vertical text reads upwards or downwards: read it the other way too and keep the better reading
     vert = [i for i, s in enumerate(strs) if s["dir"][0] == 0 and _better(namer, texts[i]) < 3]
@@ -387,9 +386,11 @@ def choose_pages(doc, bom, log=print, skip=()):
         return len(u) - 1.5 * inter
     options = [[c] for c in cands] + [[a, b] for i, a in enumerate(cands) for b in cands[i + 1:]]
     top = max(val(o) for o in options)
-    near = [o for o in options if val(o) >= 0.97 * top]
+    # plain silkscreen pages beat busier views of the same side unless those read clearly more
+    near = [o for o in options if val(o) >= 0.92 * top]
     chosen = list(min(near, key=lambda o: sum(c["nd"] for c in o)))
-    chosen.sort(key=lambda c: c["pn"])
+    # top side first: the side carrying more BOM parts (the other is often only test points)
+    chosen.sort(key=lambda c: (-c["nbom"], c["pn"]))
     # final, careful reading of the chosen pages (letter-shape voting on)
     out = []
     for c in chosen:

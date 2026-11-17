@@ -9,17 +9,16 @@ Nothing is uploaded anywhere. The result is a single HTML file you can open offl
 
 ## Install (once)
 
-1. **Python 3.9 or newer** (already on the company laptop).
-2. **Tesseract OCR**, used to read labels that the PDF draws as lines:
-   - download the Windows installer from <https://github.com/UB-Mannheim/tesseract/wiki>
-   - run it; "Install just for me" works without admin rights
-   - the tool finds it in the usual install folders, no PATH change needed.
-     A portable copy in a folder named `Tesseract-OCR` next to `build.py` also works.
-3. The Python packages are installed by `run.bat` on first use (`pip install --user -r requirements.txt`).
+Only **Python 3.10 or newer** is needed. Everything else comes from pip: `run.bat` installs it on
+first use (`pip install --user -r requirements.txt`), with no admin rights and no separate program.
+The OCR engine is the pip package `tesserocr`, and its English data file is included in
+`pcbfinder/tessdata`.
+
+If you already have the Tesseract program installed, the tool can also use that instead.
 
 ## Use
 
-Drag the PDF onto **run.bat**. After 1-2 minutes the page opens in your browser. It is saved next
+Drag the PDF onto **run.bat**. After about 1 minute the page opens in your browser. It is saved next
 to the PDF as `<PDF name> - component finder.html`.
 
 Without the .bat file: `python build.py "C:\path\to\file.pdf"`
@@ -50,7 +49,7 @@ The tool handles three kinds of PDF and picks the right one per page by itself:
 | The PDF stores the labels as | Example | How they are read |
 |---|---|---|
 | Hidden CAD text over drawn letters | Altium print (battery pack PCBA) | name from the CAD text, box from the drawn letters under it |
-| Lines only (no text) | GCE / CSMCN approval sheets (3B, 4A) | redrawn upright, read by Tesseract, checked against the BOM |
+| Lines only (no text) | GCE / CSMCN approval sheets (3B, 4A) | redrawn upright, read by OCR, checked against the BOM |
 | Real text | some CAD exports | taken as is |
 
 Then it picks the layout page of each board side (the plain silkscreen page, not combined-layer views)
@@ -60,13 +59,13 @@ and reads the BOM table from the table lines in the PDF.
 
 | PDF | Labels located | BOM parts located |
 |---|---|---|
-| 3B main PCBA (2 sides + photos) | 237 | 134 of 137 |
+| 3B main PCBA (2 sides + photos) | 238 | 134 of 137 |
 | 4A main PCBA (2 sides) | 182 | 178 of 180 |
 | Battery pack PCBA (Altium, no BOM) | 35 | (no BOM in the PDF) |
 
-On the 3B board all 158 top-side labels were checked against a hand-made list: 153 right, 1 wrong
-(an unlisted part read as L64 instead of R97) and 4 missed (C35 and C37 printed touching, lower-case
-"Fuse1", and the unlisted C27). All 83 bottom-side test points were right.
+On the 3B board all 158 top-side labels were checked against a hand-made list: 154 right, 1 wrong
+(an unlisted part read as L64 instead of R97) and 3 missed (C35 and C37 printed touching, and
+lower-case "Fuse1"). All 83 bottom-side test points were right.
 
 ## Limits
 
@@ -81,7 +80,8 @@ On the 3B board all 158 top-side labels were checked against a hand-made list: 1
 - `build.py` - the command you run
 - `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
 - `pcbfinder/seg.py` - cutting drawn lines into letters and words
-- `pcbfinder/ocr.py` - Tesseract calls
+- `pcbfinder/ocr.py` - OCR calls (built-in tesserocr, or the Tesseract program)
+- `pcbfinder/tessdata/` - English OCR data
 - `pcbfinder/bom.py` - reading the BOM table
 - `pcbfinder/board.py` - board outline, part outlines, photos, schematic
 - `pcbfinder/template.html` - the page

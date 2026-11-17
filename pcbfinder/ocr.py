@@ -62,11 +62,54 @@ def tesseract():
     return None
 
 
+TESSDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tessdata")
+_API = {}
+
+
+def _engine():
+    """'lib' when the pip package tesserocr is installed (no separate program needed), else 'exe', else None"""
+    try:
+        import tesserocr  # noqa
+        if os.path.isfile(os.path.join(TESSDATA, "eng.traineddata")):
+            return "lib"
+    except Exception:
+        pass
+    return "exe" if tesseract() else None
+
+
+def available():
+    return _engine() is not None
+
+
+def describe():
+    e = _engine()
+    if e == "lib":
+        import tesserocr
+        return "tesserocr " + tesserocr.tesseract_version().split()[1] + " (built in)"
+    if e == "exe":
+        return tesseract()
+    return None
+
+
+def _tsv_lib(img, chars):
+    import tesserocr
+    from PIL import Image
+    api = _API.get(chars)
+    if api is None:
+        api = tesserocr.PyTessBaseAPI(path=TESSDATA + os.sep, lang="eng", psm=tesserocr.PSM.SINGLE_BLOCK)
+        api.SetVariable("tessedit_char_whitelist", chars)
+        _API[chars] = api
+    api.SetImage(Image.fromarray(img))
+    api.Recognize()
+    return "level\tpage_num\n" + api.GetTSVText(0)
+
+
 def read_all(strings, chars="ABCDEFGHJKLMNPQRSTUVWXYZ0123456789", mirror=False):
-    """Returns one OCR string per input string ('' when unreadable). One Tesseract call per 120 strings."""
-    exe = tesseract()
-    if not exe:
+    """Returns one OCR string per input string ('' when unreadable). One OCR call per 120 strings."""
+    eng = _engine()
+    if not eng:
         return None
+    exe = tesseract()
     out = [""] * len(strings)
     tmp = tempfile.mkdtemp()
     try:
@@ -78,12 +121,15 @@ def read_all(strings, chars="ABCDEFGHJKLMNPQRSTUVWXYZ0123456789", mirror=False):
             page = np.full((rowh * len(ims) + 40, W), 255, np.uint8)
             for k, im in enumerate(ims):
                 page[20 + k * rowh: 20 + k * rowh + im.shape[0], 20:20 + im.shape[1]] = im
-            f = os.path.join(tmp, "p.png"); cv2.imwrite(f, page)
-            r = subprocess.run([exe, f, "-", "--psm", "6", "-c", "tessedit_char_whitelist=" + chars, "tsv"], encoding="utf-8", errors="replace",
-                               creationflags=(0x08000000 if os.name == "nt" else 0),
-                               capture_output=True, text=True)
+            if eng == "lib":
+                tsv = _tsv_lib(page, chars)
+            else:
+                f = os.path.join(tmp, "p.png"); cv2.imwrite(f, page)
+                tsv = subprocess.run([exe, f, "-", "--psm", "6", "-c", "tessedit_char_whitelist=" + chars, "tsv"], encoding="utf-8", errors="replace",
+                                     creationflags=(0x08000000 if os.name == "nt" else 0),
+                                     capture_output=True, text=True).stdout
             rows = {}
-            for line in r.stdout.splitlines()[1:]:
+            for line in tsv.splitlines()[1:]:
                 p = line.split("\t")
                 if len(p) < 12 or not p[11].strip():
                     continue
