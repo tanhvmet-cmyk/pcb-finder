@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pdf
+*.fixes.json
+* - component finder.html
