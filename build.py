@@ -56,6 +56,12 @@ def build(pdf, out=None, open_after=True):
     doc = pymupdf.open(pdf)
     log(f"Reading {os.path.basename(pdf)} ({len(doc)} pages)")
 
+    from pcbfinder import ocr
+    if ocr.tesseract():
+        log("    OCR: " + ocr.tesseract())
+    else:
+        log("    NOTE: Tesseract OCR is not installed. Labels drawn as lines cannot be read; only PDFs that")
+        log("          carry the names as text (e.g. Altium prints) will work. See README > Install.")
     log("1/5 BOM table ...")
     bom, bom_pages = bomlib.parse_bom(doc)
     log(f"    {len(bom)} designators in the BOM (pages {bom_pages})" if bom else "    no BOM table found - continuing without part values")
@@ -63,7 +69,9 @@ def build(pdf, out=None, open_after=True):
     log("2/5 reading the labels on the layout pages ...")
     pages = lab.choose_pages(doc, bom, log=log, skip=set(bom_pages))
     if not pages:
-        sys.exit("STOP: no layout page with component labels was found in this PDF.")
+        from pcbfinder import ocr
+        sys.exit("STOP: no layout page with component labels was found in this PDF." +
+                 ("" if ocr.tesseract() else "\nTesseract OCR is not installed - install it (README > Install) and run again."))
     sides = ["top", "bottom"][:len(pages)]
 
     log("3/5 board outline, photos ...")

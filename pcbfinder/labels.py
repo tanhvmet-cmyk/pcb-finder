@@ -169,7 +169,8 @@ def text_labels(page, strs, namer):
     if pend:
         ks = sorted({k for _, ii in pend for k in ii})
         reads = {}
-        if ks:
+        have_ocr = ocr.tesseract() is not None
+        if ks and have_ocr:
             got = ocr.read_all([strs[k] for k in ks]) or [""] * len(ks)
             reads = dict(zip(ks, got))
             # vertical text may read either way
@@ -182,7 +183,13 @@ def text_labels(page, strs, namer):
                 for k, t in zip(vk, ocr.read_all(flips) or [""] * len(vk)):
                     reads[k] = (reads[k], t)
         for name, ii in pend:
-            hit = [k for k in ii if any(_same(name, t, len(strs[k]["g"])) for t in (reads.get(k) if isinstance(reads.get(k), tuple) else (reads.get(k),)))]
+            if have_ocr:
+                hit = [k for k in ii if any(_same(name, t, len(strs[k]["g"])) for t in (reads.get(k) if isinstance(reads.get(k), tuple) else (reads.get(k),)))]
+            else:
+                # no OCR: the drawn word under the CAD name must have as many letters as the name
+                n = len(name.replace("_", "").replace("-", ""))
+                hit = [k for k in ii if len(strs[k]["g"]) == n] or [k for k in ii if n > 3 and abs(len(strs[k]["g"]) - n) == 1]
+                hit = sorted(hit, key=lambda k: -_inter(strs[k]["bb"], strs[k]["bb"]))[:1]
             if not hit:
                 continue                                 # this name is not printed on this page
             bb = strs[hit[0]]["bb"]
