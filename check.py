@@ -31,6 +31,17 @@ def run(pdf):
         return {"error": f"{type(e).__name__}: {e}", "log": buf.getvalue()}
     r = json.load(open(rep, encoding="utf-8"))
     shutil.rmtree(tmp, ignore_errors=True)
+    # the netlist traced from the copper (only for CAD prints with pad names)
+    try:
+        import pymupdf
+        from pcbfinder import pathview as PV
+        with contextlib.redirect_stdout(io.StringIO()):
+            res = PV.netlist(pymupdf.open(pdf), log=lambda s: None)
+        r["nets"] = sorted(sorted({PV.ref(p["des"], p["pin"]) for p in n}) for n in res["nets"])
+    except SystemExit:
+        pass
+    except Exception as e:
+        r["nets_error"] = f"{type(e).__name__}: {e}"
     return r
 
 
@@ -75,6 +86,26 @@ def compare(exp, got):
     new = sorted(gn - en)
     if new:
         good.append(f"{len(new)} names newly found (check they are right): " + ", ".join(new[:30]))
+    if "nets" in exp:
+        if "nets" not in got:
+            bad.append("the netlist could not be traced any more" + (f" ({got['nets_error']})" if got.get("nets_error") else ""))
+        else:
+            E_ = {frozenset(n) for n in exp["nets"]}
+            G_ = {frozenset(n) for n in got["nets"]}
+            gone = [n for n in E_ - G_]
+            if gone:
+                where = {}
+                for n in G_:
+                    for p in n:
+                        where[p] = n
+                merged = [n for n in gone if any(len(where.get(p, n)) > len(n) for p in n)]
+                split = [n for n in gone if n not in merged]
+                if merged:
+                    bad.append(f"{len(merged)} nets are now joined to other nets (wrong connection?): " +
+                               "; ".join(", ".join(sorted(n)[:4]) for n in merged[:6]))
+                if split:
+                    bad.append(f"{len(split)} nets are now broken apart (missed connection?): " +
+                               "; ".join(", ".join(sorted(n)[:4]) for n in split[:6]))
     if got.get("bom_found", 0) < exp.get("bom_found", 0):
         bad.append(f"BOM parts found dropped from {exp['bom_found']} to {got['bom_found']} of {got['bom']}")
     elif got.get("bom_found", 0) > exp.get("bom_found", 0):

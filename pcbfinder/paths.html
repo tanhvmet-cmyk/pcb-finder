@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{--bg:#f5f4ef;--card:#fff;--ink:#1c1c1a;--mute:#6a6963;--line:#dcd9cf;--acc:#1f5f8b;--hot:#e0192f;--path:#ff8c00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{max-width:1400px;margin:0 auto;padding:14px 14px 6px}
+h1{font-size:19px;margin:0 0 4px}
+.sum{font-size:14px;color:#333;max-width:980px}
+.warn{margin-top:6px;font-size:13px;color:#8b1a1a;background:#fbe9e7;border-radius:6px;padding:4px 10px;display:inline-block}
+main{max-width:1400px;margin:0 auto;padding:8px 12px 30px;display:grid;grid-template-columns:minmax(0,1.75fr) minmax(300px,1fr);gap:12px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;cursor:pointer}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.sp{flex:1}
+#q{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;width:220px;max-width:100%}
+.res{position:absolute;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);max-height:320px;overflow:auto;min-width:240px}
+.res div{padding:6px 10px;cursor:pointer;font-size:14px}.res div:hover{background:#eef4f9}
+.scroll{position:relative;overflow:auto;height:72vh;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:pan-x pan-y}
+@media(max-width:900px){.scroll{height:58vh}}
+.stage{position:relative;transform-origin:0 0}
+.stage img,.stage canvas,.stage svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.stage img{image-rendering:auto}
+.note{font-size:12.5px;color:var(--mute)}
+h2{font-size:15px;margin:2px 0 8px}
+.plist button{display:block;width:100%;text-align:left;margin:4px 0;padding:7px 10px;font-size:14px}
+.plist .k{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--mute);margin:10px 0 2px;text-transform:uppercase}
+.steps{margin:8px 0 0;padding-left:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;padding:6px 8px 6px 34px;position:relative;border-radius:8px;cursor:pointer;font-size:14px}
+.steps li::before{content:counter(s);position:absolute;left:8px;top:6px;width:19px;height:19px;border-radius:50%;background:var(--path);color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.steps li:hover{background:#f6f2ea}.steps li.on{background:#fde8e9}.steps li.on::before{background:var(--hot)}
+.steps li .nm{display:block;font-size:12px;color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chips span{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:13px;cursor:pointer;background:#fafaf7}
+.chips span:hover{border-color:var(--acc)}
+.kv{font-size:14px}.kv b{font-weight:600}
+.leg{display:flex;gap:12px;font-size:12.5px;color:var(--mute);margin-top:6px;flex-wrap:wrap}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+</style>
+</head>
+<body>
+<header>
+<h1 id="title"></h1>
+<div class="sum" id="sum"></div>
+<div class="warn" id="warn" hidden></div>
+</header>
+<main>
+<section class="card">
+<div class="bar">
+<button data-v="top" class="on">Mặt trên</button><button data-v="bottom">Mặt dưới</button><button data-v="sch">Schematic</button>
+<span class="sp"></span>
+<button id="zo">−</button><button id="zi">+</button><button id="zf">Vừa khung</button>
+<span style="position:relative"><input id="q" placeholder="Tìm: R309, U201.1, 3V3…" autocomplete="off"><div class="res" id="res" hidden></div></span>
+</div>
+<div class="scroll" id="scroll"><div class="stage" id="stage"></div></div>
+<div class="leg"><span><i class="sw" style="background:var(--path)"></i>đường đang xem</span><span><i class="sw" style="background:var(--hot)"></i>net đang chọn</span><span><i class="sw" style="border:2px solid #0a7cff"></i>linh kiện đang chọn</span><span id="vnote"></span></div>
+</section>
+<section>
+<div class="card" id="info"><h2>Bấm vào đường đồng, chân linh kiện trên schematic, hoặc chọn một đường đi bên dưới.</h2></div>
+<div class="card" style="margin-top:12px"><h2>Đường đi</h2><div class="plist" id="plist"></div><div id="pdetail"></div></div>
+</section>
+</main>
+<script>
+/*__DATA__*/
+const $=id=>document.getElementById(id);
+$('title').textContent=D.title; $('sum').textContent=D.summary||''; if(D.warning){$('warn').hidden=false;$('warn').textContent='⚠ '+D.warning;}
+const NN=D.nets.length;
+const netName=k=>k<0?'(không nối)':(D.nets[k].n||('Net '+k+' ('+D.nets[k].p.slice(0,3).join(', ')+(D.nets[k].p.length>3?'…':'')+')'));
+let VIEW='top', ZOOM=1, selNet=-1, selPart=null, selPath=null, selStep=-1;
+const VIEWS={};
+function loadIds(v){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');x.drawImage(im,0,0);const d=x.getImageData(0,0,im.width,im.height).data;const ids=new Int32Array(im.width*im.height);for(let i=0,j=0;i<ids.length;i++,j+=4)ids[i]=d[j]+d[j+1]*256-1;res(ids);};im.src=D[v].ids;});}
+const stage=$('stage'), scroll=$('scroll');
+function size(){ if(VIEW==='sch')return [D.sch.w,D.sch.h]; return [D[VIEW].w,D[VIEW].h]; }
+function fit(){const [w,h]=size();ZOOM=Math.min(scroll.clientWidth/w,scroll.clientHeight/h);applyZoom();}
+function applyZoom(cx,cy){const [w,h]=size();const ox=scroll.scrollLeft,oy=scroll.scrollTop,ow=stage.offsetWidth||1;stage.style.width=w*ZOOM+'px';stage.style.height=h*ZOOM+'px';
+ if(cx!=null){const k=stage.offsetWidth/ow;scroll.scrollLeft=(ox+cx)*k-cx;scroll.scrollTop=(oy+cy)*k-cy;}}
+$('zi').onclick=()=>{ZOOM*=1.4;applyZoom(scroll.clientWidth/2,scroll.clientHeight/2);if(VIEW==='sch')paint();};
+$('zo').onclick=()=>{ZOOM/=1.4;applyZoom(scroll.clientWidth/2,scroll.clientHeight/2);if(VIEW==='sch')paint();};
+$('zf').onclick=fit;
+scroll.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();const r=scroll.getBoundingClientRect();ZOOM*=e.deltaY<0?1.15:1/1.15;applyZoom(e.clientX-r.left,e.clientY-r.top);},{passive:false});
+// drag to pan with the mouse
+let drag=null;scroll.addEventListener('mousedown',e=>{drag={x:e.clientX,y:e.clientY,l:scroll.scrollLeft,t:scroll.scrollTop,m:false};});
+window.addEventListener('mousemove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4)drag.m=true;scroll.scrollLeft=drag.l-dx;scroll.scrollTop=drag.t-dy;});
+window.addEventListener('mouseup',()=>{setTimeout(()=>drag=null,0);});
+
+function build(){
+ stage.innerHTML='';
+ if(VIEW==='sch'){
+  if(!D.sch){stage.innerHTML='<div style="padding:20px">File này không có trang schematic đọc được.</div>';return;}
+  const im=new Image();im.src=D.sch.img;stage.appendChild(im);
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox',`0 0 ${D.sch.w} ${D.sch.h}`);svg.id='ov';stage.appendChild(svg);
+  $('vnote').textContent='';
+ }else{
+  const V=D[VIEW];const im=new Image();im.src=V.img;stage.appendChild(im);
+  const c=document.createElement('canvas');c.width=V.w;c.height=V.h;c.id='ov';stage.appendChild(c);
+  $('vnote').textContent=VIEW==='bottom'?'Mặt dưới nhìn từ phía dưới (ảnh lật so với mặt trên).':'';
+ }
+ paint();
+}
+const C_PATH=[255,140,0,235], C_SEL=[224,25,47,255];
+function pathNets(){const s=new Set();if(selPath)for(const st of selPath.s)if(st.net!=null)s.add(st.net);return s;}
+function partRefNets(){return new Set();}
+async function paint(){
+ const pn=pathNets();
+ if(VIEW==='sch'){
+  const svg=$('ov');if(!svg)return;const z=D.sch.z;let s='';
+  const draw=(k,col,w)=>{for(const [x1,y1,x2,y2] of (D.sch.wires[k]||[]))s+=`<line x1="${x1*z}" y1="${y1*z}" x2="${x2*z}" y2="${y2*z}" stroke="${col}" stroke-width="${w}" vector-effect="non-scaling-stroke" stroke-linecap="round" opacity=".95"/>`;
+   for(const [x,y] of (D.sch.pins[k]||[]))s+=`<circle cx="${x*z}" cy="${y*z}" r="${Math.max(6,w*1.4/ZOOM)}" fill="${col}" opacity=".85"/>`;};
+  for(const k of pn)if(k!==selNet)draw(k,'#ff8c00',4);
+  if(selNet>=0)draw(selNet,'#e0192f',5);
+  svg.innerHTML=s;return;
+ }
+ const V=D[VIEW];if(!VIEWS[VIEW])VIEWS[VIEW]=await loadIds(VIEW);
+ const ids=VIEWS[VIEW], c=$('ov');if(!c)return;const x=c.getContext('2d');
+ const img=x.createImageData(V.w,V.h);const u=new Uint32Array(img.data.buffer);
+ const lut=new Uint32Array(NN+1);const pk=a=>(a[3]<<24)|(a[2]<<16)|(a[1]<<8)|a[0];
+ for(const k of pn)lut[k+1]=pk(C_PATH); if(selNet>=0)lut[selNet+1]=pk(C_SEL);
+ for(let i=0;i<ids.length;i++){const v=ids[i];if(v>=0)u[i]=lut[v+1];}
+ x.putImageData(img,0,0);
+ // parts: pads of the selected part, and labels of the pins on the selected net
+ const pads=[];if(selPart&&D.parts[selPart])for(const p of D.parts[selPart].pads)pads.push([selPart,p]);
+ x.lineWidth=3;x.strokeStyle='#0a7cff';
+ for(const [d,p] of pads){const [px,py]=VIEW==='top'?[p[1],p[2]]:[p[3],p[4]];x.beginPath();x.arc(px,py,9,0,7);x.stroke();}
+ if(selNet>=0){x.font='bold 13px system-ui';x.textBaseline='bottom';
+  for(const r of D.nets[selNet].p){const [d,pin]=r.split(/\.(?=[^.]+$)/);const P=D.parts[d];if(!P)continue;const pp=P.pads.find(q=>q[0]===pin);if(!pp)continue;
+   if(VIEW==='top'&&pp[6]==='bottom'||VIEW==='bottom'&&pp[6]==='top')continue;
+   const [px,py]=VIEW==='top'?[pp[1],pp[2]]:[pp[3],pp[4]];x.fillStyle='rgba(255,255,255,.85)';const t=r;const w=x.measureText(t).width;x.fillRect(px+5,py-17,w+6,16);x.fillStyle='#8a0f1d';x.fillText(t,px+8,py-2);}
+ }
+}
+function bboxOf(k){ // where net k sits in the current view (image pixels)
+ if(VIEW==='sch'){const pts=[...(D.sch.pins[k]||[])].map(([x,y])=>[x*D.sch.z,y*D.sch.z]);if(!pts.length)return null;const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+ const ids=VIEWS[VIEW];if(!ids)return null;const V=D[VIEW];let x0=1e9,y0=1e9,x1=-1,y1=-1;
+ for(let i=0;i<ids.length;i+=3){if(ids[i]===k){const x=i%V.w,y=(i/V.w)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}}
+ return x1<0?null:[x0,y0,x1,y1];}
+function reveal(bb){if(!bb)return;const cx=(bb[0]+bb[2])/2*ZOOM,cy=(bb[1]+bb[3])/2*ZOOM;const vw=scroll.clientWidth,vh=scroll.clientHeight;
+ const l=scroll.scrollLeft,t=scroll.scrollTop;if(cx<l+40||cx>l+vw-40||cy<t+40||cy>t+vh-40){scroll.scrollTo({left:cx-vw/2,top:cy-vh/2,behavior:'smooth'});}}
+function partBBox(d){const P=D.parts[d];if(!P)return null;let xs=[],ys=[];for(const p of P.pads){const [x,y]=VIEW==='top'?[p[1],p[2]]:[p[3],p[4]];xs.push(x);ys.push(y);}return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-v]').forEach(x=>x.classList.toggle('on',x===b));VIEW=b.dataset.v;build();fit();setTimeout(()=>{if(selNet>=0)reveal(bboxOf(selNet));},50);});
+
+stage.addEventListener('click',e=>{
+ if(drag&&drag.m)return;
+ const r=stage.getBoundingClientRect();const [w,h]=size();const x=(e.clientX-r.left)/r.width*w,y=(e.clientY-r.top)/r.height*h;
+ if(VIEW==='sch'){const z=D.sch.z;let best=null;
+  for(const [k,pts] of Object.entries(D.sch.pins))for(const [px,py] of pts){const d=Math.hypot(px*z-x,py*z-y);if(d<14&&(!best||d<best[0]))best=[d,+k];}
+  if(!best)for(const [k,segs] of Object.entries(D.sch.wires))for(const [x1,y1,x2,y2] of segs){const ax=x1*z,ay=y1*z,bx=x2*z,by=y2*z;const dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy||1;const t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/L));const d=Math.hypot(ax+t*dx-x,ay+t*dy-y);if(d<8&&(!best||d<best[0]))best=[d,+k];}
+  if(best)selectNet(best[1],false);return;}
+ const ids=VIEWS[VIEW];if(!ids)return;const V=D[VIEW];let k=-1;
+ for(let rr=0;rr<=8&&k<0;rr+=2)for(let dy=-rr;dy<=rr&&k<0;dy+=2)for(let dx=-rr;dx<=rr&&k<0;dx+=2){const xx=Math.round(x+dx),yy=Math.round(y+dy);if(xx>=0&&yy>=0&&xx<V.w&&yy<V.h){const v=ids[yy*V.w+xx];if(v>=0)k=v;}}
+ // a pad click also selects the part
+ let bp=null;for(const [d,P] of Object.entries(D.parts))for(const p of P.pads){if(VIEW==='top'&&p[6]==='bottom'||VIEW==='bottom'&&p[6]==='top')continue;const [px,py]=VIEW==='top'?[p[1],p[2]]:[p[3],p[4]];const dd=Math.hypot(px-x,py-y);if(dd<7&&(!bp||dd<bp[0]))bp=[dd,d];}
+ if(bp)selPart=bp[1];
+ if(k>=0)selectNet(k,false);else if(bp)showPart(bp[1]);
+});
+
+function selectNet(k,go=true){selNet=k;showNet(k);paint();if(go)reveal(bboxOf(k));}
+function chip(r){const [d]=r.split(/\.(?=[^.]+$)/);const P=D.parts[d];return `<span data-part="${d}" title="${P&&P.b?P.b.replace(/"/g,''):''}">${r}</span>`;}
+function showNet(k){
+ const n=D.nets[k];
+ const inPaths=D.paths.filter(p=>p.s.some(s=>s.net===k));
+ $('info').innerHTML=`<h2 style="color:#b0101f">${netName(k)}</h2><div class="kv">${n.p.length} chân nối với nhau:</div><div class="chips">${n.p.map(chip).join('')}</div>`+
+ (inPaths.length?`<div class="note" style="margin-top:8px">Nằm trong: ${inPaths.map(p=>`<a href="#" data-path="${p.id}">${p.t}</a>`).join(', ')}</div>`:'');
+ wireInfo();
+}
+function showPart(d){
+ selPart=d;const P=D.parts[d];if(!P){return;}
+ const side=P.s==='top'?'mặt trên':P.s==='bottom'?'mặt dưới':'xuyên lỗ (cả 2 mặt)';
+ const rows=P.pads.slice().sort((a,b)=>(+a[0]||0)-(+b[0]||0)||String(a[0]).localeCompare(b[0])).map(p=>`<div style="margin:2px 0"><b>chân ${p[0]}</b> → <a href="#" data-net="${p[5]}">${netName(p[5])}</a></div>`).join('');
+ $('info').innerHTML=`<h2 style="color:#0a5fc4">${d}</h2><div class="kv">${side}${P.b?' · '+P.b:''}</div><div style="margin-top:6px;font-size:14px">${rows}</div>`;
+ wireInfo();paint();
+ if(VIEW!=='sch'){const want=P.s==='bottom'?'bottom':'top';if(VIEW!==want&&P.s!=='both'){document.querySelector(`[data-v="${want}"]`).click();}else reveal(partBBox(d));}
+}
+function wireInfo(){
+ $('info').querySelectorAll('[data-part]').forEach(s=>s.onclick=()=>showPart(s.dataset.part));
+ $('info').querySelectorAll('[data-net]').forEach(a=>a.onclick=e=>{e.preventDefault();selectNet(+a.dataset.net);});
+ $('info').querySelectorAll('[data-path]').forEach(a=>a.onclick=e=>{e.preventDefault();openPath(a.dataset.path);});
+}
+// paths
+function listPaths(){
+ const g={power:'Dòng điện',signal:'Tín hiệu'};let h='';
+ for(const k of ['power','signal']){const ps=D.paths.filter(p=>p.k===k);if(!ps.length)continue;h+=`<div class="k">${g[k]}</div>`+ps.map(p=>`<button data-p="${p.id}" class="${selPath&&selPath.id===p.id?'on':''}">${p.t}</button>`).join('');}
+ if(!D.paths.length)h='<div class="note">Chưa có phần giải thích đường đi cho bo này. Vẫn có thể bấm vào bất kỳ đường đồng nào để xem nó nối tới đâu.</div>';
+ $('plist').innerHTML=h;$('plist').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>openPath(b.dataset.p));
+}
+function openPath(id){
+ selPath=D.paths.find(p=>p.id===id)||null;selStep=-1;listPaths();
+ if(!selPath){$('pdetail').innerHTML='';paint();return;}
+ $('pdetail').innerHTML=`<div style="margin-top:10px;font-size:14px">${selPath.d}</div><ol class="steps">${selPath.s.map((s,i)=>`<li data-i="${i}">${s.t}${s.net!=null?`<span class="nm">${netName(s.net)}</span>`:s.comp?`<span class="nm">linh kiện ${s.comp}</span>`:''}</li>`).join('')}</ol>`;
+ $('pdetail').querySelectorAll('li').forEach(li=>li.onclick=()=>step(+li.dataset.i));
+ selNet=-1;paint();
+ if(VIEW!=='sch'){const ks=[...pathNets()];let bb=null;for(const k of ks){const b=bboxOf(k);if(b)bb=bb?[Math.min(bb[0],b[0]),Math.min(bb[1],b[1]),Math.max(bb[2],b[2]),Math.max(bb[3],b[3])]:b;}reveal(bb);}
+ if(window.innerWidth<900)$('pdetail').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function step(i){
+ selStep=i;const s=selPath.s[i];
+ $('pdetail').querySelectorAll('li').forEach(li=>li.classList.toggle('on',+li.dataset.i===i));
+ if(s.comp){selPart=s.comp;}
+ if(window.innerWidth<900)scroll.scrollIntoView({behavior:'smooth',block:'start'});
+ if(s.net!=null){selectNet(s.net);}
+ else if(s.comp){showPart(s.comp);}
+}
+// search
+const q=$('q'),res=$('res');
+q.addEventListener('input',()=>{
+ const t=q.value.trim().toUpperCase();if(!t){res.hidden=true;return;}
+ const out=[];
+ for(const d of Object.keys(D.parts))if(d.toUpperCase().startsWith(t))out.push(['p',d,d+(D.parts[d].b?' — '+D.parts[d].b:'')]);
+ D.nets.forEach((n,k)=>{if((n.n||'').toUpperCase().includes(t))out.push(['n',k,n.n]);else{const r=n.p.find(r=>r.toUpperCase()===t);if(r)out.push(['n',k,r+' → '+netName(k)]);}});
+ res.innerHTML=out.slice(0,14).map(o=>`<div data-t="${o[0]}" data-k="${o[1]}">${o[2]}</div>`).join('')||'<div>Không thấy</div>';res.hidden=false;
+ res.querySelectorAll('[data-t]').forEach(dv=>dv.onclick=()=>{res.hidden=true;if(dv.dataset.t==='p')showPart(dv.dataset.k);else selectNet(+dv.dataset.k);});
+});
+document.addEventListener('click',e=>{if(!res.contains(e.target)&&e.target!==q)res.hidden=true;});
+listPaths();build();setTimeout(fit,30);window.addEventListener('resize',()=>{});
+</script>
+</body>
+</html>

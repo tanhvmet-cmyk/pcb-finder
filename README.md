@@ -80,6 +80,21 @@ Không dùng agent: Terminal → Run Task → chọn **PCB Finder: build page fr
 Bộ kiểm tra (thư mục `test-cases/`) chỉ nằm trên máy, không bao giờ đưa lên GitHub.
 Thêm một file đã chạy đúng vào bộ kiểm tra: `python check.py add "đường dẫn file.pdf"`.
 
+## Đường đi của dòng điện và tín hiệu (bản in CAD có lớp đồng)
+
+Với PDF in từ Altium có trang lớp đồng mặt trên / mặt dưới (ví dụ "Top Layer", "Bottom Layer"):
+
+    python paths.py "đường dẫn file.pdf"
+
+Công cụ lần theo đồng của 2 lớp, nối qua lỗ via, ra danh sách nối dây (`<tên PDF> - nets.json`)
+và trang `<tên PDF> - paths.html`: bấm vào đường đồng hay chân linh kiện trên schematic là sáng
+cả net đó trên 2 mặt mạch và trên schematic. Phần giải thích từng đường đi (nguồn vào → cầu chì →
+tải; lệnh từ vi điều khiển → mạch kích → tải) do agent **pcb-finder** viết vào
+`<tên PDF> - paths.json` rồi chạy lại với `--notes`. Trong Copilot chỉ cần gõ:
+`Giải thích đường điện của file D:\...\abc.pdf`.
+
+Bản phê duyệt chỉ có hình lớp chữ (không có lớp đồng) thì không lần được đường đi.
+
 ## What the page shows
 
 - **Red box**: the designator as printed on the PCB. This position is read from the PDF itself, so it is exact.
@@ -123,7 +138,8 @@ lower-case "Fuse1"). All 83 bottom-side test points were right.
 ## Files
 
 - `build.py` - the command you run (`--report r.json` writes the numbers and warnings)
-- `check.py` - re-runs saved test PDFs and reports anything that got worse
+- `check.py` - re-runs saved test PDFs and reports anything that got worse (labels and netlist)
+- `paths.py` - current and signal paths page; `pcbfinder/nets.py` traces the copper, `pcbfinder/pathview.py` + `pcbfinder/paths.html` make the page
 - `.github/agents/pcb-finder.agent.md` - the Copilot agent
 - `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
 - `pcbfinder/seg.py` - cutting drawn lines into letters and words

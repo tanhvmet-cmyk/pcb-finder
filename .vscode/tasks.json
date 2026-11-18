@@ -19,14 +19,26 @@
       "type": "shell",
       "command": "python build.py \"${input:pdf}\" --save",
       "problemMatcher": [],
-      "group": { "kind": "build", "isDefault": true }
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "PCB Finder: current and signal paths page",
+      "type": "shell",
+      "command": "python paths.py \"${input:pdf}\"",
+      "problemMatcher": []
     },
     {
       "label": "PCB Finder: check old PDFs still work",
       "type": "shell",
       "command": "python check.py",
       "problemMatcher": [],
-      "group": { "kind": "test", "isDefault": true }
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
     },
     {
       "label": "PCB Finder: add a PDF as a test case",
