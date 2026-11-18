@@ -18,8 +18,14 @@ If you already have the Tesseract program installed, the tool can also use that 
 
 ## Use
 
-Drag the PDF onto **run.bat**. After about 1 minute the page opens in your browser. It is saved next
-to the PDF as `<PDF name> - component finder.html`.
+Drag the PDF onto **run.bat**. After about 1 minute the page opens in your browser as a preview, and the
+window asks whether to keep it:
+
+    [Y] save next to the PDF:  C:\...\<PDF name> - component finder.html
+    [S] choose where to save        (opens the normal Save As window)
+    [N] do not save                 (the preview copy is removed automatically after a day)
+
+Pressing Enter means Y. To save without being asked: `python build.py "file.pdf" --save`.
 
 Without the .bat file: `python build.py "C:\path\to\file.pdf"`
 
@@ -50,7 +56,8 @@ tool needs adjusting for it.
 ### Hướng dẫn nhanh (tiếng Việt)
 
 1. Kéo file PDF vào `run.bat`. Lần đầu tool tự cài thư viện; các lần sau chạy luôn (1-2 phút/file).
-2. Trang kết quả mở trong trình duyệt và được lưu cạnh file PDF: `<tên PDF> - component finder.html`.
+2. Trang kết quả mở trong trình duyệt để xem trước. Cửa sổ hỏi có lưu không: **Y** lưu cạnh file PDF,
+   **S** chọn nơi lưu (mở hộp thoại Save As), **N** không lưu. Nhấn Enter = Y.
 3. Gõ tên linh kiện (R43, C5, TP33...), khung đỏ là chỗ in tên đó trên PCB.
 4. Xem cuối cửa sổ: "x of y BOM designators located". Nếu số này thấp bất thường hoặc tool báo
    "STOP: no layout page", PDF đó là kiểu mới và cần chỉnh tool.

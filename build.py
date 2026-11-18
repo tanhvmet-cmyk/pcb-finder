@@ -6,7 +6,7 @@ PCB component finder: turn a PCBA layout PDF into one searchable HTML page.
 
 Output: "<pdf name> - component finder.html" next to the PDF (opens in the browser when done).
 """
-import sys, os, re, io, json, base64, argparse, webbrowser, time
+import sys, os, re, io, json, base64, argparse, webbrowser, time, shutil, tempfile, pathlib
 import numpy as np
 import cv2
 import pymupdf
@@ -49,10 +49,72 @@ def board_mm(doc, pages):
     return None
 
 
-def build(pdf, out=None, open_after=True):
+def preview_dir():
+    """a private folder for pages not saved yet; pages older than a day are cleared on each run"""
+    d = os.path.join(tempfile.gettempdir(), "pcb-finder-preview")
+    os.makedirs(d, exist_ok=True)
+    for f in os.listdir(d):
+        p = os.path.join(d, f)
+        try:
+            if time.time() - os.path.getmtime(p) > 86400:
+                os.remove(p)
+        except OSError:
+            pass
+    return d
+
+
+def open_in_browser(path):
+    try:
+        if os.name == "nt":
+            os.startfile(os.path.abspath(path))          # the browser Windows uses for .html files
+        else:
+            webbrowser.open(pathlib.Path(os.path.abspath(path)).as_uri())
+    except Exception as e:
+        log(f"  (could not open the browser: {e}) - open this file yourself: {path}")
+
+
+def ask_save(tmp, default_path):
+    """after the preview: the person decides whether, and where, the page is kept"""
+    log("")
+    log("The page is open in your browser. Keep it?")
+    log("  [Y] save next to the PDF:  " + default_path)
+    log("  [S] choose where to save")
+    log("  [N] do not save")
+    try:
+        ans = input("Your choice (Y/S/N) [Y]: ").strip().lower()
+    except EOFError:
+        ans = "y"                                        # no one to ask (script use): keep it
+    if ans.startswith("n"):
+        log("Not saved. (The preview copy is removed automatically after a day.)")
+        return None
+    dest = default_path
+    if ans.startswith("s"):
+        try:
+            import tkinter
+            from tkinter import filedialog
+            root = tkinter.Tk(); root.withdraw(); root.attributes("-topmost", True)
+            dest = filedialog.asksaveasfilename(parent=root, title="Save the component finder page",
+                                                initialdir=os.path.dirname(os.path.abspath(default_path)),
+                                                initialfile=os.path.basename(default_path),
+                                                defaultextension=".html", filetypes=[("Web page", "*.html")])
+            root.destroy()
+        except Exception as e:
+            log(f"  (save window not available: {e})")
+            dest = input("Type the full path to save to (empty = next to the PDF): ").strip().strip('"') or default_path
+        if not dest:
+            log("Not saved.")
+            return None
+    shutil.copyfile(tmp, dest)
+    log("Saved:  " + dest)
+    return dest
+
+
+def build(pdf, out=None, open_after=True, ask=True):
+    """ask=True: preview first, then the person decides whether to save. ask=False: save straight to `out`."""
     t0 = time.time()
     stem = os.path.splitext(pdf)[0]
-    out = out or stem + " - component finder.html"
+    final = os.path.abspath(out or stem + " - component finder.html")
+    out = os.path.join(preview_dir(), os.path.basename(final)) if ask else final
     doc = pymupdf.open(pdf)
     log(f"Reading {os.path.basename(pdf)} ({len(doc)} pages)")
 
@@ -151,7 +213,7 @@ def build(pdf, out=None, open_after=True):
 
     on_board = [c for c in comps if not c.get("miss")]
     log("")
-    log("DONE  ->  " + out)
+    log("DONE")
     log(f"  {len(on_board)} labels located on the board drawing ({time.time()-t0:.0f} s)")
     if bom:
         nb = len(found & set(bom))
@@ -160,11 +222,11 @@ def build(pdf, out=None, open_after=True):
         if miss:
             log("  BOM designators whose label was not found: " + ", ".join(miss))
     if open_after:
-        try:
-            webbrowser.open("file://" + os.path.abspath(out))
-        except Exception:
-            pass
-    return out
+        open_in_browser(out)
+    if not ask:
+        log("Saved:  " + out)
+        return out
+    return ask_save(out, final)
 
 
 if __name__ == "__main__":
@@ -172,7 +234,8 @@ if __name__ == "__main__":
     ap.add_argument("pdf", help="the PCBA PDF")
     ap.add_argument("-o", "--out", help="output HTML file (default: next to the PDF)")
     ap.add_argument("--no-open", action="store_true", help="do not open the browser when finished")
+    ap.add_argument("--save", action="store_true", help="save without asking (next to the PDF, or to --out)")
     a = ap.parse_args()
     if not os.path.exists(a.pdf):
         sys.exit("File not found: " + a.pdf)
-    build(a.pdf, a.out, not a.no_open)
+    build(a.pdf, a.out, not a.no_open, ask=not a.save)
