@@ -80,20 +80,22 @@ Không dùng agent: Terminal → Run Task → chọn **PCB Finder: build page fr
 Bộ kiểm tra (thư mục `test-cases/`) chỉ nằm trên máy, không bao giờ đưa lên GitHub.
 Thêm một file đã chạy đúng vào bộ kiểm tra: `python check.py add "đường dẫn file.pdf"`.
 
-## Đường đi của dòng điện và tín hiệu (bản in CAD có lớp đồng)
-
-Với PDF in từ Altium có trang lớp đồng mặt trên / mặt dưới (ví dụ "Top Layer", "Bottom Layer"):
+## Dòng điện chạy trên schematic (current flow)
 
     python paths.py "đường dẫn file.pdf"
+    python paths.py "đường dẫn file.pdf" --flows "tên file - flows.json"
 
-Công cụ lần theo đồng của 2 lớp, nối qua lỗ via, ra danh sách nối dây (`<tên PDF> - nets.json`)
-và trang `<tên PDF> - paths.html`: bấm vào đường đồng hay chân linh kiện trên schematic là sáng
-cả net đó trên 2 mặt mạch và trên schematic. Phần giải thích từng đường đi (nguồn vào → cầu chì →
-tải; lệnh từ vi điều khiển → mạch kích → tải) do agent **pcb-finder** viết vào
-`<tên PDF> - paths.json` rồi chạy lại với `--notes`. Trong Copilot chỉ cần gõ:
-`Giải thích đường điện của file D:\...\abc.pdf`.
+Lần chạy đầu đọc trang schematic (tự tìm, nhiều trang cũng được) và tạo
+`<tên PDF> - current flow.html`: bấm vào dây bất kỳ là sáng cả net. Tệp
+`<tên PDF> - schematic nets.json` ghi mọi net, linh kiện, nhãn để agent đọc.
+Agent **pcb-finder** viết `<tên PDF> - flows.json` (tiếng Anh): mỗi đường điện là một dãy
+nhãn / linh kiện / chân, ví dụ `["@ACL", "F101", "LF101.2", "LF101.3", "P112",
+"~Suction motor (off board)~", "P113", "RY301.2", "RY301.1", "@ACN1"]`. Lần chạy thứ hai vẽ các
+đường đó dọc theo dây thật, có mũi tên và chấm chạy theo chiều dòng điện, kèm giải thích.
+Trong Copilot chỉ cần gõ: `Vẽ dòng điện chạy trên schematic của file D:\...\abc.pdf`.
 
-Bản phê duyệt chỉ có hình lớp chữ (không có lớp đồng) thì không lần được đường đi.
+PDF in từ Altium (có tên chân ẩn) được đọc chính xác; schematic khác được đọc từ nét vẽ
+(có thể sót vài linh kiện — chương trình báo ra).
 
 ## What the page shows
 
@@ -139,7 +141,7 @@ lower-case "Fuse1"). All 83 bottom-side test points were right.
 
 - `build.py` - the command you run (`--report r.json` writes the numbers and warnings)
 - `check.py` - re-runs saved test PDFs and reports anything that got worse (labels and netlist)
-- `paths.py` - current and signal paths page; `pcbfinder/nets.py` traces the copper, `pcbfinder/pathview.py` + `pcbfinder/paths.html` make the page
+- `paths.py` - current flow on the schematic; `pcbfinder/schgraph.py` reads wires, pins and labels, `pcbfinder/flowview.py` + `pcbfinder/flow.html` make the page; `pcbfinder/nets.py` traces the board copper (checks the flows)
 - `.github/agents/pcb-finder.agent.md` - the Copilot agent
 - `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
 - `pcbfinder/seg.py` - cutting drawn lines into letters and words

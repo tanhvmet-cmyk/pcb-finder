@@ -5,7 +5,8 @@ component's designator can be searched and its printed name is shown on the boar
 
 - For any request about running a PDF or improving how PDFs are read, follow
   `.github/agents/pcb-finder.agent.md` (also selectable as the **pcb-finder** agent).
-- Questions about how power or signals flow on a board: section 5 of the agent file (`paths.py`).
+- Questions about how power or signals flow on a board: section 5 of the agent file (`paths.py`,
+  current flow drawn on the schematic, texts in English).
 - After changing any file in `build.py`, `paths.py` or `pcbfinder/`, run `python check.py`. Every test case
   must report OK before the change is kept.
 - Fixes must be general (work for other PDFs of the same style), never tied to one file, page

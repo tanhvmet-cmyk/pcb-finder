@@ -42,6 +42,19 @@ def run(pdf):
         pass
     except Exception as e:
         r["nets_error"] = f"{type(e).__name__}: {e}"
+    # the schematic: pins, parts and named nets read (for the current-flow page)
+    try:
+        import pymupdf
+        from pcbfinder import schgraph as SG
+        doc = pymupdf.open(pdf)
+        pns = SG.schematic_pages(doc)
+        if pns:
+            g = SG.SchGraph([doc[i] for i in pns])
+            nets = g.nets()
+            r["schematic"] = dict(pages=[p + 1 for p in pns], source=g.pin_source, pins=len(g.tip),
+                                  parts=len(g.parts()), named_nets=sum(1 for n in nets.values() if n["names"]))
+    except Exception as e:
+        r["schematic_error"] = f"{type(e).__name__}: {e}"
     return r
 
 
@@ -106,6 +119,16 @@ def compare(exp, got):
                 if split:
                     bad.append(f"{len(split)} nets are now broken apart (missed connection?): " +
                                "; ".join(", ".join(sorted(n)[:4]) for n in split[:6]))
+    if "schematic" in exp:
+        es, gs = exp["schematic"], got.get("schematic")
+        if not gs:
+            bad.append("the schematic page is not read any more" + (f" ({got['schematic_error']})" if got.get("schematic_error") else ""))
+        else:
+            for k_, what in (("pins", "schematic pins"), ("parts", "schematic parts"), ("named_nets", "named schematic nets")):
+                if gs[k_] < es[k_]:
+                    bad.append(f"{what} read dropped from {es[k_]} to {gs[k_]}")
+                elif gs[k_] > es[k_]:
+                    good.append(f"{what} read rose from {es[k_]} to {gs[k_]}")
     if got.get("bom_found", 0) < exp.get("bom_found", 0):
         bad.append(f"BOM parts found dropped from {exp['bom_found']} to {got['bom_found']} of {got['bom']}")
     elif got.get("bom_found", 0) > exp.get("bom_found", 0):

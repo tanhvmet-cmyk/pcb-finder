@@ -25,7 +25,7 @@
       }
     },
     {
-      "label": "PCB Finder: current and signal paths page",
+      "label": "PCB Finder: current flow on the schematic",
       "type": "shell",
       "command": "python paths.py \"${input:pdf}\"",
       "problemMatcher": []

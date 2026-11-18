@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{--bg:#f4f3ee;--card:#fff;--ink:#1b1b19;--mute:#66655f;--line:#dad7cd;--acc:#1f5f8b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{max-width:1500px;margin:0 auto;padding:14px 14px 4px}
+h1{font-size:19px;margin:0 0 4px}
+.sum{font-size:14px;color:#2d2d2a;max-width:1080px}
+.warn[hidden]{display:none}
+.warn{margin-top:6px;font-size:13px;color:#8b1a1a;background:#fbe9e7;border-radius:6px;padding:4px 10px;display:inline-block}
+.conv{font-size:12.5px;color:var(--mute);margin-top:4px;max-width:1080px}
+main{max-width:1500px;margin:0 auto;padding:8px 12px 30px;display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:12px}
+main>section{min-width:0}
+@media(max-width:980px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--ink)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;user-select:none}
+.chip i{width:16px;height:5px;border-radius:3px;display:inline-block}
+.chip.off{opacity:.38}
+#q{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:8px;width:170px}
+.scroll{position:relative;overflow:auto;height:76vh;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:pan-x pan-y}
+@media(max-width:980px){.scroll{height:62vh}}
+.stage{position:relative}
+.stage img{position:absolute;opacity:.93}
+.stage svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
+svg .halo{fill:none;stroke:#fff;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+svg .line{fill:none;stroke-linecap:round;stroke-linejoin:round}
+svg .run{fill:none;stroke-linecap:round;stroke:#fff;opacity:.85;animation:run 1.2s linear infinite}
+.paused svg .run{animation-play-state:paused}
+@keyframes run{to{stroke-dashoffset:-30}}
+svg .fl.dim{opacity:.07}
+svg .fl.dim .dot,svg .fl.dim .arw{display:none}
+svg .netseg{stroke:#ffcc00;stroke-linecap:round;fill:none}
+svg .netedge{stroke:#5a4500;stroke-linecap:round;fill:none}
+svg .badge text{font-family:system-ui,sans-serif;font-weight:700}
+svg .hl{fill:rgba(10,124,255,.08);stroke:#0a7cff;stroke-width:2.5;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{stroke-opacity:.25}}
+h2{font-size:15px;margin:2px 0 8px}
+.grp{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--mute);margin:10px 0 3px;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.grp i{width:16px;height:5px;border-radius:3px;display:inline-block}
+.fbtn{display:block;width:100%;text-align:left;margin:3px 0;padding:6px 9px;font-size:13.5px;border-left-width:5px}
+.fbtn.on{background:#eef4f9;color:var(--ink);font-weight:600}
+.detail{font-size:14px}
+.chain{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;align-items:center}
+.chain span{border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:13px;cursor:pointer;background:#fafaf7}
+.chain span.off{border-style:dashed;color:var(--mute);cursor:default}
+.chain b{color:var(--mute);font-weight:400}
+.notes{margin:6px 0 0;padding-left:18px}
+.notes li{margin:3px 0;cursor:pointer}
+.notes li:hover{color:var(--acc)}
+.pins{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.pins span{border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12.5px;cursor:pointer;background:#fafaf7}
+.small{font-size:12.5px;color:var(--mute)}
+.ctl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mute)}
+a{color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+<h1 id="title"></h1>
+<div class="sum" id="sum"></div>
+<div class="warn" id="warn" hidden></div>
+<div class="conv" id="conv"></div>
+</header>
+<main>
+<section class="card">
+<div class="bar" id="legend"></div>
+<div class="bar">
+<button id="all" class="on">Show all</button>
+<button id="play">⏸ Pause</button>
+<span class="ctl">Speed <input id="speed" type="range" min="0.3" max="3" step="0.1" value="1"></span>
+<span class="sp"></span>
+<button id="zo" title="Zoom out">−</button><button id="zi" title="Zoom in">+</button><button id="zf">Fit</button>
+<input id="q" placeholder="Find: F101, U201, 3V3…" autocomplete="off">
+</div>
+<div class="scroll" id="scroll"><div class="stage" id="stage"><svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg></div></div>
+<div class="small" style="margin-top:6px">Arrows and moving dots show the direction of the current. A ring with a name is a net label: the current continues at the label with the same name elsewhere on the drawing. A grey dotted curve is where the current leaves the board (wires to a motor, a pump, a lamp). Click any wire to light up its whole net. Drag to move; Ctrl + wheel or two fingers to zoom.</div>
+</section>
+<section>
+<div class="card" id="detail"></div>
+<div class="card" style="margin-top:12px"><h2>Current paths</h2><div id="list"></div></div>
+</section>
+</main>
+<script>
+/*__DATA__*/
+const $=id=>document.getElementById(id);
+$('title').textContent=D.title||'Current flow on the schematic';$('sum').textContent=D.summary||'';$('conv').textContent=D.convention||'';
+if(D.warning){$('warn').hidden=false;$('warn').textContent='⚠ '+D.warning;}
+const KIND_ORDER=Object.keys(D.kinds).filter(k=>D.flows.some(f=>f.k===k));
+for(const f of D.flows)if(!D.kinds[f.k]){D.kinds[f.k]={label:f.k,color:'#555'};KIND_ORDER.push(f.k);}
+const col=k=>(D.kinds[k]||{}).color||'#444';
+const WIDTH={ac:5.5,hv:4.8,batt:5.2,dc:4.2,ctl:3.4,sense:3.4};
+let SCALE=1, focus=null, hidden=new Set(), playing=true, SPEED=1, HL=null, NET=-1;
+const stage=$('stage'), scroll=$('scroll'), svg=$('ov');
+svg.setAttribute('viewBox',`0 0 ${D.w} ${D.h}`);
+for(const im of D.imgs){const e=document.createElement('img');e.src=im.src;e.alt='schematic page '+im.pn;
+ e.style.left=(im.x/D.w*100)+'%';e.style.top=(im.y/D.h*100)+'%';e.style.width=(im.w/D.w*100)+'%';e.style.height=(im.h/D.h*100)+'%';stage.insertBefore(e,svg);}
+const NETOF={};D.nets.forEach((n,i)=>n.p.forEach(p=>NETOF[p]=i));
+const netName=i=>i<0?'':(D.nets[i].n.length?D.nets[i].n.join(' / '):'net '+i+' ('+D.nets[i].p.slice(0,3).join(', ')+(D.nets[i].p.length>3?'…':'')+')');
+function legLen(p){let s=0;for(let i=1;i<p.length;i++)s+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);return s;}
+function offCurve(a,b){const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1;const k=Math.min(40,L*.35);return [mx-dy/L*k,my+dx/L*k];}
+function quadPts(a,c,b,n=16){const o=[];for(let i=0;i<=n;i++){const t=i/n;o.push([(1-t)*(1-t)*a[0]+2*(1-t)*t*c[0]+t*t*b[0],(1-t)*(1-t)*a[1]+2*(1-t)*t*c[1]+t*t*b[1]]);}return o;}
+for(const f of D.flows){
+ let d='',pen=null,len=0;const vis=[],marks=[],offs=[];let bb=[1e9,1e9,-1e9,-1e9];
+ const grow=(x,y)=>{bb=[Math.min(bb[0],x),Math.min(bb[1],y),Math.max(bb[2],x),Math.max(bb[3],y)];};
+ for(const l of f.legs){const p=l.p;
+  if(l.k==='wire'||l.k==='body'){
+   if(!pen||Math.hypot(pen[0]-p[0][0],pen[1]-p[0][1])>0.05)d+=`M${p[0][0]} ${p[0][1]}`;
+   for(let i=1;i<p.length;i++)d+=`L${p[i][0]} ${p[i][1]}`;
+   len+=legLen(p);pen=p[p.length-1];vis.push(p);p.forEach(q=>grow(q[0],q[1]));
+  }else if(l.k==='off'){
+   const c=offCurve(p[0],p[1]);
+   if(!pen||Math.hypot(pen[0]-p[0][0],pen[1]-p[0][1])>0.05)d+=`M${p[0][0]} ${p[0][1]}`;
+   d+=`Q${c[0]} ${c[1]} ${p[1][0]} ${p[1][1]}`;const qp=quadPts(p[0],c,p[1]);len+=legLen(qp);pen=p[1];offs.push([p[0],c,p[1],l.t,qp]);grow(p[0][0],p[0][1]);grow(p[1][0],p[1][1]);
+  }else if(l.k==='jump'){marks.push(['j',p[0],l.t]);marks.push(['j',p[1],l.t]);pen=null;grow(p[0][0],p[0][1]);grow(p[1][0],p[1][1]);}
+  else if(l.k==='in'){marks.push(['in',p[0],l.t]);grow(p[0][0],p[0][1]);}
+  else if(l.k==='out'){marks.push(['out',p[0],l.t]);grow(p[0][0],p[0][1]);}
+ }
+ Object.assign(f,{_d:d,_len:len,_vis:vis,_marks:marks,_offs:offs,_bb:bb});
+}
+// arrows: filled triangles every ~80 screen px along the current, at least one on every piece
+function arrows(f,c){
+ let s='';const sp=80/SCALE, sz=1/SCALE;
+ const pieces=f._vis.concat(f._offs.map(o=>o[4]));
+ for(const p of pieces){
+  const L=legLen(p);if(L*SCALE<14)continue;
+  const n=Math.max(1,Math.floor(L/sp));const step=L/n;let target=step/2,acc=0;
+  for(let i=1;i<p.length&&target<L;i++){const a=p[i-1],b=p[i],l=Math.hypot(b[0]-a[0],b[1]-a[1]);
+   while(target<=acc+l&&target<L){const t=(target-acc)/(l||1);const x=a[0]+(b[0]-a[0])*t,y=a[1]+(b[1]-a[1])*t;const ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;
+    s+=`<path class="arw" d="M-7 -6 L7 0 L-7 6 L-3.5 0 Z" transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${ang.toFixed(1)}) scale(${sz.toFixed(4)})" fill="${c}" stroke="#fff" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+    target+=step;}
+   acc+=l;}
+ }
+ return s;
+}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function draw(){
+ let s='';
+ if(NET>=0){let a='';for(const g of D.segs)if(g[4]===NET)a+=`M${g[0]} ${g[1]}L${g[2]} ${g[3]}`;
+  s+=`<path class="netedge" d="${a}" stroke-width="9" vector-effect="non-scaling-stroke" opacity=".35"/><path class="netseg" d="${a}" stroke-width="6" vector-effect="non-scaling-stroke"/>`;}
+ const order=[...D.flows].sort((a,b)=>KIND_ORDER.indexOf(a.k)-KIND_ORDER.indexOf(b.k));
+ for(const f of order){
+  if(hidden.has(f.k)&&focus!==f.id)continue;
+  const w=WIDTH[f.k]||3.6, c=col(f.k);
+  const dim=(focus&&focus!==f.id)||(NET>=0&&!focus);
+  s+=`<g class="fl${dim?' dim':''}" data-f="${f.id}">`;
+  s+=`<path class="halo" d="${f._d}" stroke-width="${w+4}" vector-effect="non-scaling-stroke"/>`;
+  for(const [a,cc,b] of f._offs)s+=`<path d="M${a[0]} ${a[1]}Q${cc[0]} ${cc[1]} ${b[0]} ${b[1]}" fill="none" stroke="#fff" stroke-width="${w+2}" vector-effect="non-scaling-stroke"/><path d="M${a[0]} ${a[1]}Q${cc[0]} ${cc[1]} ${b[0]} ${b[1]}" fill="none" stroke="#777" stroke-width="2.2" stroke-dasharray="2 5" vector-effect="non-scaling-stroke"/>`;
+  s+=`<path class="line" d="${f._d}" stroke="${c}" stroke-width="${w}" vector-effect="non-scaling-stroke"/>`;
+  s+=`<path class="run" d="${f._d}" stroke-width="${Math.max(1.2,w-3)}" stroke-dasharray="3 27" vector-effect="non-scaling-stroke"/>`;
+  s+=arrows(f,c);
+  const n=Math.max(2,Math.round(f._len/45)), dur=Math.max(3,f._len/(40*SPEED));
+  for(let i=0;i<n;i++)s+=`<circle class="dot" r="${(4.2/SCALE).toFixed(3)}" fill="#fff" stroke="${c}" stroke-width="2.4" vector-effect="non-scaling-stroke"><animateMotion dur="${dur.toFixed(2)}s" begin="-${(dur*i/n).toFixed(2)}s" repeatCount="indefinite" path="${f._d}" calcMode="linear"/></circle>`;
+  const named=(focus===f.id)||(!focus&&NET<0&&SCALE>=2.4);
+  for(const [k,p,t] of f._marks){
+   if(!named){s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${(4/SCALE).toFixed(3)}" fill="#fff" stroke="${c}" stroke-width="2.2" vector-effect="non-scaling-stroke"/>`;continue;}
+   const txt=(k==='in'?'IN ▸ ':k==='out'?'OUT ▸ ':'→ ')+(t||(k==='j'?'label':''));
+   const fs=11/SCALE, wd=(txt.length*6.6+12)/SCALE, h=16/SCALE;
+   s+=`<g class="badge" transform="translate(${p[0]} ${p[1]})"><circle r="${5/SCALE}" fill="#fff" stroke="${c}" stroke-width="2.6" vector-effect="non-scaling-stroke"/>`+
+      `<rect x="${7/SCALE}" y="${-h-3/SCALE}" width="${wd}" height="${h}" rx="${4/SCALE}" fill="${c}" stroke="#fff" vector-effect="non-scaling-stroke"/>`+
+      `<text x="${12/SCALE}" y="${-7/SCALE}" fill="#fff" style="font-size:${fs}px">${esc(txt)}</text></g>`;
+  }
+  if(named)for(const [a,cc,b,t] of f._offs){const x=(a[0]+2*cc[0]+b[0])/4,y=(a[1]+2*cc[1]+b[1])/4;const fs=11/SCALE,wd=(t.length*6.3+14)/SCALE,h=17/SCALE;
+   s+=`<g class="badge" transform="translate(${x} ${y})"><rect x="${-wd/2}" y="${-h/2}" width="${wd}" height="${h}" rx="${8/SCALE}" fill="#fff" stroke="#777" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><text x="0" y="${4/SCALE}" text-anchor="middle" fill="#333" style="font-size:${fs}px">${esc(t)}</text></g>`;}
+  s+='</g>';
+ }
+ if(HL&&D.parts[HL]){const b=D.parts[HL];s+=`<rect class="hl" x="${b[0]}" y="${b[1]}" width="${b[2]-b[0]}" height="${b[3]-b[1]}" rx="2" vector-effect="non-scaling-stroke"/>`;}
+ svg.innerHTML=s;
+ if(!playing)svg.pauseAnimations();
+}
+function applyZoom(cx,cy){const ow=stage.offsetWidth||1;const ox=scroll.scrollLeft,oy=scroll.scrollTop;stage.style.width=D.w*SCALE+'px';stage.style.height=D.h*SCALE+'px';
+ if(cx!=null){const k=stage.offsetWidth/ow;scroll.scrollLeft=(ox+cx)*k-cx;scroll.scrollTop=(oy+cy)*k-cy;}}
+let redrawT=null;function zoomBy(f,cx,cy){SCALE=Math.max(0.25,Math.min(14,SCALE*f));applyZoom(cx,cy);clearTimeout(redrawT);redrawT=setTimeout(draw,120);}
+function fit(){SCALE=Math.min(scroll.clientWidth/D.w,scroll.clientHeight/D.h);applyZoom();draw();}
+$('zi').onclick=()=>zoomBy(1.4,scroll.clientWidth/2,scroll.clientHeight/2);
+$('zo').onclick=()=>zoomBy(1/1.4,scroll.clientWidth/2,scroll.clientHeight/2);
+$('zf').onclick=fit;
+scroll.addEventListener('wheel',e=>{if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();const r=scroll.getBoundingClientRect();zoomBy(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+let drag=null;
+scroll.addEventListener('mousedown',e=>{drag={x:e.clientX,y:e.clientY,l:scroll.scrollLeft,t:scroll.scrollTop,m:false};});
+window.addEventListener('mousemove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4)drag.m=true;scroll.scrollLeft=drag.l-dx;scroll.scrollTop=drag.t-dy;});
+window.addEventListener('mouseup',()=>setTimeout(()=>drag=null,0));
+let pinch=null;
+scroll.addEventListener('touchstart',e=>{if(e.touches.length===2){const[a,b]=e.touches;pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)};}},{passive:true});
+scroll.addEventListener('touchmove',e=>{if(pinch&&e.touches.length===2){e.preventDefault();const[a,b]=e.touches;const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);const r=scroll.getBoundingClientRect();zoomBy(d/pinch.d,(a.clientX+b.clientX)/2-r.left,(a.clientY+b.clientY)/2-r.top);pinch.d=d;}},{passive:false});
+scroll.addEventListener('touchend',()=>{pinch=null;});
+function zoomTo(bb,pad=30){if(!bb||bb[0]>bb[2])return;const w=bb[2]-bb[0]+2*pad,h=bb[3]-bb[1]+2*pad;SCALE=Math.max(0.25,Math.min(8,Math.min(scroll.clientWidth/w,scroll.clientHeight/h)));applyZoom();draw();
+ scroll.scrollTo({left:(bb[0]-pad)*SCALE-(scroll.clientWidth-w*SCALE)/2,top:(bb[1]-pad)*SCALE-(scroll.clientHeight-h*SCALE)/2,behavior:'smooth'});}
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'⏸ Pause':'▶ Play';stage.classList.toggle('paused',!playing);playing?svg.unpauseAnimations():svg.pauseAnimations();};
+$('speed').oninput=e=>{SPEED=+e.target.value;clearTimeout(redrawT);redrawT=setTimeout(draw,150);};
+function legend(){
+ $('legend').innerHTML=KIND_ORDER.map(k=>`<span class="chip${hidden.has(k)?' off':''}" data-k="${k}"><i style="background:${col(k)}"></i>${esc(D.kinds[k].label)}</span>`).join('');
+ $('legend').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{const k=c.dataset.k;hidden.has(k)?hidden.delete(k):hidden.add(k);legend();draw();});
+}
+function list(){
+ let h='';
+ for(const k of KIND_ORDER){const fs=D.flows.filter(f=>f.k===k);if(!fs.length)continue;
+  h+=`<div class="grp"><i style="background:${col(k)}"></i>${esc(D.kinds[k].label)}</div>`+fs.map(f=>`<button class="fbtn${focus===f.id?' on':''}" style="border-left-color:${col(k)}" data-f="${f.id}">${esc(f.t)}</button>`).join('');}
+ if(!D.flows.length)h='<div class="small">No current paths have been written for this board yet. Click any wire on the drawing to see its whole net. (The agent writes the paths into a flows file — see the README.)</div>';
+ $('list').innerHTML=h;$('list').querySelectorAll('.fbtn').forEach(b=>b.onclick=()=>openFlow(b.dataset.f));
+}
+function intro(){$('detail').innerHTML='<h2>Click a current path to follow it step by step</h2><div class="small">Or click any wire on the drawing to light up its net, or a part to see which paths go through it.</div>';}
+function flowsThroughPart(p){return D.flows.filter(f=>f.chain.includes(p));}
+function flowsOnNet(i){const pins=new Set(D.nets[i].p);return D.flows.filter(f=>f.pins.some(t=>pins.has(t.replace(/[<>]/g,''))));}
+function openFlow(id){
+ focus=id;NET=-1;HL=null;const f=D.flows.find(x=>x.id===id);$('all').classList.remove('on');list();
+ $('detail').innerHTML=`<h2 style="border-left:5px solid ${col(f.k)};padding-left:8px">${esc(f.t)}</h2><div class="detail">${esc(f.d)}</div>`+
+  `<div class="chain">${f.chain.map((p,i)=>(i?'<b>→</b>':'')+(p.startsWith('~')?`<span class="off">${esc(p.slice(1))}</span>`:`<span data-p="${esc(p)}">${esc(p)}</span>`)).join('')}</div>`+
+  (f.notes&&f.notes.length?`<ul class="notes">${f.notes.map(n=>`<li data-p="${esc(n.at)}"><b>${esc(n.at)}</b>: ${esc(n.text)}</li>`).join('')}</ul>`:'')+
+  (f.probs&&f.probs.length?`<div class="small" style="color:#a33;margin-top:6px">${f.probs.map(esc).join('<br>')}</div>`:'');
+ $('detail').querySelectorAll('[data-p]').forEach(e=>e.onclick=()=>{HL=e.dataset.p;draw();revealPart(HL);});
+ zoomTo(f._bb);
+ if(window.innerWidth<980)scroll.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function showNet(i){
+ NET=i;focus=null;HL=null;$('all').classList.remove('on');list();
+ const fl=flowsOnNet(i);
+ $('detail').innerHTML=`<h2 style="border-left:5px solid #ffcc00;padding-left:8px">${esc(netName(i))}</h2><div class="small">${D.nets[i].p.length} pins on this net:</div>`+
+  `<div class="pins">${D.nets[i].p.map(p=>`<span data-pp="${esc(p)}" title="${esc(D.bom[p.split('.')[0]]||'')}">${esc(p)}</span>`).join('')}</div>`+
+  (fl.length?`<div class="small" style="margin-top:8px">Current paths using this net:</div>`+fl.map(f=>`<button class="fbtn" style="border-left-color:${col(f.k)}" data-f="${f.id}">${esc(f.t)}</button>`).join(''):'');
+ $('detail').querySelectorAll('[data-pp]').forEach(e=>e.onclick=()=>showPart(e.dataset.pp.split('.')[0]));
+ $('detail').querySelectorAll('.fbtn').forEach(b=>b.onclick=()=>openFlow(b.dataset.f));
+ draw();
+}
+function showPart(p){
+ if(!D.parts[p])return;HL=p;focus=null;NET=-1;list();
+ const fl=flowsThroughPart(p);
+ const pins=Object.keys(NETOF).filter(r=>r.split('.')[0]===p).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+ $('detail').innerHTML=`<h2>${esc(p)}</h2>${D.bom[p]?`<div class="detail">${esc(D.bom[p])}</div>`:''}`+
+  `<div class="small" style="margin-top:6px">Pins and their nets:</div><div style="font-size:13.5px">${pins.map(r=>`<div>pin ${esc(r.split('.').pop())} → <a href="#" data-n="${NETOF[r]}">${esc(netName(NETOF[r]))}</a></div>`).join('')}</div>`+
+  `<div class="small" style="margin-top:8px">${fl.length?'Current paths through '+esc(p)+':':'No current path drawn through '+esc(p)+'.'}</div>`+
+  fl.map(f=>`<button class="fbtn" style="border-left-color:${col(f.k)}" data-f="${f.id}">${esc(f.t)}</button>`).join('');
+ $('detail').querySelectorAll('[data-n]').forEach(a=>a.onclick=e=>{e.preventDefault();showNet(+a.dataset.n);});
+ $('detail').querySelectorAll('.fbtn').forEach(b=>b.onclick=()=>openFlow(b.dataset.f));
+ draw();revealPart(p);
+}
+function revealPart(p){const b=D.parts[p];if(!b)return;if(SCALE<2.2){SCALE=2.6;applyZoom();draw();}
+ scroll.scrollTo({left:(b[0]+b[2])/2*SCALE-scroll.clientWidth/2,top:(b[1]+b[3])/2*SCALE-scroll.clientHeight/2,behavior:'smooth'});}
+$('all').onclick=()=>{focus=null;HL=null;NET=-1;$('all').classList.add('on');list();intro();fit();};
+stage.addEventListener('click',e=>{
+ if(drag&&drag.m)return;
+ const r=stage.getBoundingClientRect();const x=(e.clientX-r.left)/SCALE,y=(e.clientY-r.top)/SCALE;
+ const segd=(a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy||1;const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/L));return Math.hypot(a[0]+t*dx-x,a[1]+t*dy-y)*SCALE;};
+ let bf=null;
+ for(const f of D.flows){if(hidden.has(f.k)&&focus!==f.id)continue;if(focus&&focus!==f.id)continue;for(const p of f._vis)for(let i=1;i<p.length;i++){const d=segd(p[i-1],p[i]);if(d<6&&(!bf||d<bf[0]))bf=[d,f.id];}}
+ let bn=null;for(const g of D.segs){const d=segd([g[0],g[1]],[g[2],g[3]]);if(d<6&&(!bn||d<bn[0]))bn=[d,g[4]];}
+ let part=null;for(const [p,b] of Object.entries(D.parts)){if(x>=b[0]&&x<=b[2]&&y>=b[1]&&y<=b[3]){const a=(b[2]-b[0])*(b[3]-b[1]);if(!part||a<part[1])part=[p,a];}}
+ if(bf&&!focus){openFlow(bf[1]);return;}
+ if(bn){showNet(bn[1]);return;}
+ if(part){showPart(part[0]);return;}
+ if(bf)openFlow(bf[1]);
+});
+$('q').addEventListener('keydown',e=>{if(e.key!=='Enter')return;const t=e.target.value.trim().toUpperCase();if(!t)return;
+ const p=Object.keys(D.parts).find(k=>k.toUpperCase()===t)||Object.keys(D.parts).find(k=>k.toUpperCase().startsWith(t));
+ if(p){showPart(p);return;}
+ let n=D.nets.findIndex(n=>n.n.some(x=>x.toUpperCase()===t));if(n<0)n=D.nets.findIndex(n=>n.n.some(x=>x.toUpperCase().includes(t)));
+ if(n>=0)showNet(n);});
+legend();list();intro();
+window.addEventListener('load',fit);setTimeout(fit,80);
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 ---
 name: pcb-finder
-description: Turn a PCBA PDF into a searchable component-finder page and a page of current and signal paths, explain how power and signals flow, check how well the PDF was read, and fix the tool when it is read badly.
+description: Turn a PCBA PDF into a searchable component-finder page and an animated page of how current flows on the schematic, explain power and signal paths, check how well the PDF was read, and fix the tool when it is read badly.
 argument-hint: Path of the PCBA PDF, e.g. D:\PCBA\Main board.pdf
 ---
 
@@ -59,8 +59,9 @@ a rule written for one file name, one page number or one designator):
    - `pcbfinder/ocr.py` – OCR of drawn strings (pip package `tesserocr`, data in `pcbfinder/tessdata`).
    - `pcbfinder/board.py` – board outline, real-board photos, schematic lookup.
    - `pcbfinder/template.html` – the page the user sees (search, views, cards).
-   - `paths.py`, `pcbfinder/nets.py` (copper tracing), `pcbfinder/pathview.py` and
-     `pcbfinder/paths.html` – the current and signal paths page (section 5).
+   - `paths.py`, `pcbfinder/schgraph.py` (schematic wires, pins, labels), `pcbfinder/flowview.py`
+     and `pcbfinder/flow.html` – the current-flow page (section 5); `pcbfinder/nets.py` traces
+     the board copper (used to check flows).
    To look inside a PDF use PyMuPDF (`import pymupdf`): `page.get_text("words")`,
    `page.get_drawings()`, `page.get_texttrace()` (type 3 = hidden text), `page.get_pixmap()`.
 4. Make the smallest general change that fixes the cause.
@@ -70,60 +71,62 @@ a rule written for one file name, one page number or one designator):
      `python check.py accept "<case name>"` to make that the new expected result.
 6. Run the new PDF again (section 1) and report the numbers before and after to the user.
 
-## 5. Current and signal paths (when the user asks how power or a signal flows)
+## 5. How current flows on the schematic (when the user asks how power or a signal flows)
 
-This works on CAD prints whose copper-layer pages carry the hidden pad names (Altium prints:
-pages titled "Top Layer" / "Bottom Layer", or two coloured copper pages). It traces every copper
-area of both layers, joins them through plated holes, and gives the netlist: which pins are
-joined. Approval sheets with only silkscreen drawings cannot be traced: say so plainly.
+The page shows the schematic with the current paths drawn along the real wires, with arrows and
+moving dots in the direction of the current, and explanations. Write it in **English** unless
+the user asks for another language. It works on any PDF with a vector schematic page: Altium
+prints are read exactly (hidden pin texts); other schematics are read from the drawing (the log
+says "pins read from the drawing (check them)" — some parts can be missed).
 
 1. Run: `python paths.py "<pdf>" --no-open`
-   It writes `<pdf name> - nets.json` and `<pdf name> - paths.html` next to the PDF.
-   If it stops with "two copper-layer pages ... were not found", tell the user this PDF has no
-   copper-layer pages to trace, and stop.
-2. Understand the board. Read `<pdf name> - nets.json`:
-   - `nets`: every net with its pins (`R309.1` = pin 1 of R309) and the name found on the schematic;
-   - `parts`: side, BOM text, and which net each pin is on;
-   - `not_connected`: pins joined to nothing.
-   Also read the schematic page text and the BOM (use PyMuPDF: `page.get_text()`), the part
-   numbers (look up what an IC does from its name if you know it), and the notes printed on the
-   schematic. Work out: where power enters, fuses and filters, each supply rail and what makes it,
-   each load (motor, heater, LED…), the switch that drives it (relay, triac, MOSFET) and the
-   microcontroller pin that commands it, and the sensor inputs.
-3. Write `<pdf name> - paths.json` in the user's language (format below). Rules:
-   - every `ref` must be a pin that exists in nets.json (`DES.PIN`); every `comp` a part that exists;
-   - follow the copper: a step's pin must really be on the net you describe — check in nets.json;
-   - say "có thể" / "probably" for anything you inferred rather than read;
-   - warn in `warning` when the board is not isolated from the mains (GND tied to L/N through a
-     non-isolated supply) or has other hazards.
-4. Rebuild: `python paths.py "<pdf>" --notes "<pdf name> - paths.json" --no-open`
-   Fix every line "note: path ... names pin ..., which is not on the board", then rebuild.
-5. Tell the user in a few lines: which paths the page explains, the main facts (e.g. "N là cực
-   13 V, GND mang điện áp lưới"), any warning, and where the page was saved.
-6. If the user says a connection is wrong or missing: add the PDF as a test case
-   (`python check.py add "<pdf>"`), look at the copper there (render both layer pages around the
-   pins with PyMuPDF), fix `pcbfinder/nets.py` in a general way, run `python check.py`, and
-   accept only checked improvements.
+   It writes next to the PDF `<pdf name> - schematic nets.json` and `<pdf name> - current flow.html`
+   (already useful: click any wire to light up its net). If it stops with "no schematic page",
+   tell the user (or pass the page numbers: `--pages 5` / `--pages 10,11`).
+2. Understand the board. Read `<pdf name> - schematic nets.json`:
+   - `nets`: every net with its label names (`names`) and pins (`R309.1` = pin 1 of R309);
+   - `parts`: every part with its pin names; `bom`: BOM text per part; `labels`: all label names.
+   Read the BOM, the schematic text and notes (PyMuPDF `page.get_text()`), and the part numbers
+   (what each IC does). Work out: where power enters (mains L/N, USB, battery, adapter), fuses and
+   filters, each supply and what makes it, each load (motor, heater, pump, LED, relay coil) and the
+   switch that drives it (relay, triac, MOSFET, transistor), the controller pin that commands it,
+   and the measurements / inputs.
+3. Write `<pdf name> - flows.json` (format below). One flow = one current loop or one signal.
+   Path tokens, in the direction of the conventional current (+ to −):
+   - `"@ACL"`: a net label / port / power symbol by name (best for where current enters or leaves:
+     `@ACL`, `@ACN`, `@BAT+`, `@13V`, `@GND`, `@3V3`);
+   - `"F101"`: a part — the tool picks the pin in and the pin out from the wiring;
+   - `"U101.4"`: a part pin — give pins for ICs, dual MOSFETs, bridges, relays (coil or contact),
+     transformers, and whenever a part could be passed two ways;
+   - `"~Suction motor (off board)~"`: the current leaves the board (connector to a motor, lamp…);
+     put the connector part or its pin on each side;
+   - optional `"<F101.1"` / `"LF101.1>"`: start / end at the label wired to that pin.
+   `kind` groups and colours the flows: "ac", "hv", "batt", "dc", "ctl", "sense" (or your own,
+   defined in `kinds`). Say in `convention` that arrows show conventional current and, for AC,
+   which half-cycle is drawn. Put a safety `warning` when the board is not isolated from mains.
+4. Build: `python paths.py "<pdf>" --flows "<pdf name> - flows.json" --no-open`
+   Every line starting with `note:` is a problem: a part or label not found, or two steps that
+   are not wired together. Fix the flow (other pin, missing step, label name) and build again
+   until there are no notes. The tool also checks the flows against the board copper when the
+   PDF has copper-layer pages.
+5. Tell the user in a few lines which current paths the page shows, the key facts (supplies,
+   where each load is switched, hazards), and where the page was saved.
 
-Notes file format (`paths.json`):
+Flows file format:
 
     {
-     "title": "short title of the board",
-     "summary": "2-3 sentences: where power comes from and where it goes",
-     "warning": "safety warning, or empty",
-     "nets": {"F101.2": "L sau cầu chì F101", "U102.1": "3V3"},
-     "paths": [
-      {"id": "suction", "kind": "power", "title": "Mô tơ hút — relay RY301",
+     "title": "…", "summary": "2–3 sentences", "warning": "…or empty",
+     "convention": "Arrows show conventional current (from + to −). …",
+     "flows": [
+      {"id": "suction", "kind": "ac", "title": "Suction motor: L → relay RY301 → N",
        "desc": "one or two sentences with the whole path",
-       "steps": [
-         {"ref": "P112.1", "text": "L ra cổng P112 tới mô tơ hút."},
-         {"comp": "RY301", "text": "Relay RY301 đóng ngắt mô tơ."}
-       ]}
+       "path": ["@ACL", "F101", "LF101.2", "LF101.3", "P112", "~Suction motor (off board)~",
+                "P113", "RY301.2", "RY301.1", "@ACN1"],
+       "notes": [{"at": "RY301", "text": "Relay contact 10 A 250 VAC."}]}
      ]
     }
 
-`kind` is "power" (where current flows) or "signal" (commands and measurements). A step with
-`ref` lights up that net; a step with `comp` marks that part.
+`check.py` re-reads the schematic of every test case: a drop in pins read is reported as WORSE.
 
 ## 4. Rules
 
