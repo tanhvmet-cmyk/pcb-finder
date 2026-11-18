@@ -65,6 +65,21 @@ tool needs adjusting for it.
 Chạy tốt: bản vẽ dạng vector, có bảng BOM. Không đọc được: bản vẽ là ảnh scan. Có thể sót: tên in chồng
 lên nhau hoặc dính vào chữ khác.
 
+## Dùng như một agent trong VS Code (GitHub Copilot)
+
+1. Mở thư mục này trong VS Code (File → Open Folder).
+2. Mở Copilot Chat, ở ô chọn agent chọn **pcb-finder**.
+3. Gõ, ví dụ: `Chạy file D:\PCBA\Main board.pdf`
+   Agent tự chạy, đọc kết quả, rồi báo: dùng trang nào cho mặt trên/dưới, tìm được bao nhiêu linh
+   kiện trong BOM, thiếu cái nào, có cảnh báo gì. File kết quả nằm cạnh file PDF.
+4. Nếu file đọc kém, gõ: `Sửa để file này đọc tốt hơn`. Agent thêm file vào bộ kiểm tra, sửa code,
+   rồi chạy lại tất cả file cũ (`python check.py`) để chắc không làm hỏng file nào.
+
+Không dùng agent: Terminal → Run Task → chọn **PCB Finder: build page from a PDF**.
+
+Bộ kiểm tra (thư mục `test-cases/`) chỉ nằm trên máy, không bao giờ đưa lên GitHub.
+Thêm một file đã chạy đúng vào bộ kiểm tra: `python check.py add "đường dẫn file.pdf"`.
+
 ## What the page shows
 
 - **Red box**: the designator as printed on the PCB. This position is read from the PDF itself, so it is exact.
@@ -107,7 +122,9 @@ lower-case "Fuse1"). All 83 bottom-side test points were right.
 
 ## Files
 
-- `build.py` - the command you run
+- `build.py` - the command you run (`--report r.json` writes the numbers and warnings)
+- `check.py` - re-runs saved test PDFs and reports anything that got worse
+- `.github/agents/pcb-finder.agent.md` - the Copilot agent
 - `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
 - `pcbfinder/seg.py` - cutting drawn lines into letters and words
 - `pcbfinder/ocr.py` - OCR calls (built-in tesserocr, or the Tesseract program)

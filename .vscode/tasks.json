@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "pdf",
+      "type": "promptString",
+      "description": "Full path of the PCBA PDF (paste it without quotes)"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "PCB Finder: install packages (first time)",
+      "type": "shell",
+      "command": "python -m pip install --user -r requirements.txt",
+      "problemMatcher": []
+    },
+    {
+      "label": "PCB Finder: build page from a PDF",
+      "type": "shell",
+      "command": "python build.py \"${input:pdf}\" --save",
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "PCB Finder: check old PDFs still work",
+      "type": "shell",
+      "command": "python check.py",
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "PCB Finder: add a PDF as a test case",
+      "type": "shell",
+      "command": "python check.py add \"${input:pdf}\"",
+      "problemMatcher": []
+    }
+  ]
+}

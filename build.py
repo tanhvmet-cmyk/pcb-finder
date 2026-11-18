@@ -109,7 +109,40 @@ def ask_save(tmp, default_path):
     return dest
 
 
-def build(pdf, out=None, open_after=True, ask=True):
+def quality(comps, bom, meta, pages):
+    """numbers and warnings that tell a person (or an agent) whether this PDF was read well"""
+    on = [c for c in comps if not c.get("miss") and not c.get("t")]
+    found = {c["n"] for c in on}
+    rep = dict(sides={s: d["page"] for s, d in meta["sides"].items()},
+               labels=len(on), texts=sum(1 for c in comps if c.get("t")),
+               bom=len(bom), bom_found=len(found & set(bom)),
+               missing=sorted(set(bom) - found, key=natural),
+               dups=sorted({c["n"] for c in on if c.get("dup")}, key=natural),
+               parts=sorted([[c["n"], c["s"], c["f"][0], c["f"][1]] for c in on if not c.get("dup")],
+                            key=lambda r: (natural(r[0]), r[1] or "")),
+               warnings=[])
+    w = rep["warnings"]
+    if not bom:
+        w.append("no BOM table was read: names cannot be checked against the parts list")
+    else:
+        pct = rep["bom_found"] / len(bom)
+        rep["percent"] = round(100 * pct, 1)
+        if pct < 0.9:
+            w.append(f"only {rep['bom_found']} of {len(bom)} BOM parts ({100*pct:.0f}%) were found on the board")
+    if len(meta["sides"]) == 1:
+        w.append("only one board side was found (" + ", ".join(meta["sides"]) +
+                 "); if the board has parts on both sides, the other side's page was not recognised")
+    if bom and on:
+        extra = sorted({c["n"] for c in on} - set(bom), key=natural)
+        rep["not_in_bom"] = extra
+        if len(extra) > 0.15 * len(on):
+            w.append(f"{len(extra)} names read on the board are not in the BOM (misread names?): " + ", ".join(extra[:15]))
+    if rep["dups"]:
+        w.append("names found more than once (check which one is right): " + ", ".join(rep["dups"][:15]))
+    return rep
+
+
+def build(pdf, out=None, open_after=True, ask=True, report=None):
     """ask=True: preview first, then the person decides whether to save. ask=False: save straight to `out`."""
     t0 = time.time()
     stem = os.path.splitext(pdf)[0]
@@ -228,6 +261,19 @@ def build(pdf, out=None, open_after=True, ask=True):
         miss = sorted(set(bom) - found, key=natural)
         if miss:
             log("  BOM designators whose label was not found: " + ", ".join(miss))
+    rep = quality(comps, bom, meta, pages)
+    log("")
+    if rep["warnings"]:
+        log("CHECK THE RESULT - this PDF may not have been read well:")
+        for w in rep["warnings"]:
+            log("  ! " + w)
+    else:
+        log("Quality check: OK")
+    if report:
+        rep["pdf"] = os.path.abspath(pdf)
+        rep["seconds"] = round(time.time() - t0)
+        with open(report, "w", encoding="utf-8") as f:
+            json.dump(rep, f, ensure_ascii=False, indent=1)
     if open_after:
         open_in_browser(out)
     if not ask:
@@ -242,7 +288,8 @@ if __name__ == "__main__":
     ap.add_argument("-o", "--out", help="output HTML file (default: next to the PDF)")
     ap.add_argument("--no-open", action="store_true", help="do not open the browser when finished")
     ap.add_argument("--save", action="store_true", help="save without asking (next to the PDF, or to --out)")
+    ap.add_argument("--report", help="also write the result numbers and warnings to this JSON file")
     a = ap.parse_args()
     if not os.path.exists(a.pdf):
         sys.exit("File not found: " + a.pdf)
-    build(a.pdf, a.out, not a.no_open, ask=not a.save)
+    build(a.pdf, a.out, not a.no_open, ask=not a.save, report=a.report)
