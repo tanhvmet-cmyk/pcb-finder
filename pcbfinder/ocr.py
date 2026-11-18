@@ -143,3 +143,41 @@ def read_all(strings, chars="ABCDEFGHJKLMNPQRSTUVWXYZ0123456789", mirror=False):
         shutil.rmtree(tmp, ignore_errors=True)
     return out
 
+
+
+def image_words(img, chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-_/.:"):
+    """every word OCR finds anywhere in a picture: [(text, conf, x, y, w, h)] (sparse-text mode)"""
+    eng = _engine()
+    if not eng:
+        return []
+    if eng == "lib":
+        import tesserocr
+        from PIL import Image
+        api = _API.get(("sparse", chars))
+        if api is None:
+            api = tesserocr.PyTessBaseAPI(path=TESSDATA + os.sep, lang="eng", psm=tesserocr.PSM.SPARSE_TEXT)
+            api.SetVariable("tessedit_char_whitelist", chars)
+            _API[("sparse", chars)] = api
+        api.SetImage(Image.fromarray(img))
+        api.Recognize()
+        tsv = api.GetTSVText(0)
+    else:
+        tmp = tempfile.mkdtemp()
+        try:
+            f = os.path.join(tmp, "w.png"); cv2.imwrite(f, img)
+            tsv = subprocess.run([tesseract(), f, "-", "--psm", "11", "-c", "tessedit_char_whitelist=" + chars, "tsv"],
+                                 encoding="utf-8", errors="replace", capture_output=True, text=True,
+                                 creationflags=(0x08000000 if os.name == "nt" else 0)).stdout
+            tsv = "\n".join(tsv.splitlines()[1:])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    out = []
+    for line in tsv.splitlines():
+        p = line.split("\t")
+        if len(p) < 12 or not p[11].strip():
+            continue
+        try:
+            out.append((p[11].strip(), float(p[10]), int(p[6]), int(p[7]), int(p[8]), int(p[9])))
+        except ValueError:
+            pass
+    return out

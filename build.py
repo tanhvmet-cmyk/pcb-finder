@@ -135,6 +135,8 @@ def build(pdf, out=None, open_after=True, ask=True):
         sys.exit("STOP: no layout page with component labels was found in this PDF." +
                  ("" if ocr.available() else "\nThe OCR engine is missing: run  python -m pip install --user tesserocr  and try again."))
     sides = ["top", "bottom"][:len(pages)]
+    if len(pages) == 1 and pages[0].get("side_hint") == "bottom":
+        sides = ["bottom"]
 
     log("3/5 board outline, photos ...")
     photos = brd.find_photos(doc)
@@ -165,7 +167,10 @@ def build(pdf, out=None, open_after=True, ask=True):
         meta["sides"][side] = dict(page=p["pn"] + 1, mirror=bool(p.get("mirror", False)), tall=bool(bh > bw))
         px = lambda bb: [round((bb[0] - clip[0]) * z, 1), round((bb[1] - clip[1]) * z, 1),
                          round((bb[2] - clip[0]) * z, 1), round((bb[3] - clip[1]) * z, 1)]
-        for l in labels:
+        names_here = {l["name"].upper() for l in labels}
+        marks = [m for m in p.get("marks", []) if clip[0] <= m["bb"][0] and m["bb"][2] <= clip[2]
+                 and clip[1] <= m["bb"][1] and m["bb"][3] <= clip[3] and m["name"].upper() not in names_here]
+        for l in labels + marks:
             b = l["bb"]
             cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
             c = dict(n=l["name"], s=side, r=px(b), f=[round((cx - board[0]) / bw, 4), round((cy - board[1]) / bh, 4)])
@@ -173,13 +178,15 @@ def build(pdf, out=None, open_after=True, ask=True):
                 c["o"] = px(outline[l["name"]])
             if l.get("dup"):
                 c["dup"] = 1
+            if l.get("how") == "mark":
+                c["t"] = 1
             if Hm is not None:
                 q = cv2.perspectiveTransform(np.float32([[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]]]), Hm)[0]
                 c["q"] = [[round(float(x), 1), round(float(y), 1)] for x, y in q]
             if l["name"] in bom:
                 c["b"] = bom[l["name"]]
             comps.append(c)
-        log(f"    {side} side = PDF page {p['pn']+1}: {len(labels)} labels" + (", photo matched" if Hm is not None else ""))
+        log(f"    {side} side = PDF page {p['pn']+1}: {len(labels)} labels, {len(marks)} other printed texts" + (", photo matched" if Hm is not None else ""))
     mm = board_mm(doc, bom_pages)
     if mm:
         for sd in meta["sides"].values():               # size from the BOM, turned to match the drawing
@@ -211,7 +218,7 @@ def build(pdf, out=None, open_after=True, ask=True):
     html = tpl.replace("/*__DATA__*/", data).replace("__TITLE__", meta["title"].replace("<", ""))
     open(out, "w", encoding="utf-8").write(html)
 
-    on_board = [c for c in comps if not c.get("miss")]
+    on_board = [c for c in comps if not c.get("miss") and not c.get("t")]
     log("")
     log("DONE")
     log(f"  {len(on_board)} labels located on the board drawing ({time.time()-t0:.0f} s)")

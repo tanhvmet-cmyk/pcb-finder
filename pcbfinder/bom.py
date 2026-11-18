@@ -12,6 +12,7 @@ def _join_des(lines):
         if txt and txt[-1].isdigit() and ln[0].isalpha():
             txt += ","
         txt += ln
+    txt = re.sub(r"(?i)designators?|references?|ref\.?des", ",", txt)   # header words stuck to names
     return [x.strip() for x in re.split(r"[,/;\s]+", txt) if re.fullmatch(r"[A-Za-z]+\d+", x.strip())]
 
 
@@ -201,10 +202,8 @@ def parse_bom_words(doc):
                               des=des, page=pn + 1))
     info = {}
     for b in items:
-        for x in re.split(r"[,/;]", b["des"]):
-            x = x.strip()
-            if re.fullmatch(r"[A-Za-z]+\d+", x):
-                info[x] = {k: b[k] for k in ("item", "comp", "pkg", "desc", "mfr", "pn", "page")}
+        for x in _join_des([b["des"]]):
+            info.setdefault(x, {k: b[k] for k in ("item", "comp", "pkg", "desc", "mfr", "pn", "page")})
     return info, sorted({b["page"] for b in items})
 
 

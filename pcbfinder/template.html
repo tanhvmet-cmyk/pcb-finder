@@ -87,8 +87,8 @@ h1 small{display:block;font:400 12px var(--mono);color:var(--muted);margin-top:2
 <aside class="rail">
   <div class="head">
     <h1>Component finder<small id="ttl"></small></h1>
-    <input id="q" type="search" placeholder="R12, C5, TP33, 100nF…" autocomplete="off" spellcheck="false" aria-label="Search component">
-    <p class="hint">Type a designator, a value or a part number. Enter jumps to the first match. Click a label on the board to see what it is.</p>
+    <input id="q" type="search" placeholder="R12, C5, TP33, GND, 100nF…" autocomplete="off" spellcheck="false" aria-label="Search component">
+    <p class="hint">Type a part name, any text printed on the board (GND, RX, B+), a value or a part number. Enter jumps to the first match. Click a label on the board to see what it is.</p>
   </div>
   <div class="count" id="count"></div>
   <ul id="list"></ul>
@@ -129,13 +129,17 @@ if(!SCH.length) $('m-sch').style.display='none';
 if(SIDES.length<2) $('sides').style.display='none';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function norm(s){return s.toLowerCase().replace(/[\s,]+/g,'').replace(/[µμ]/g,'u').replace(/ω/g,'ohm')}
-const IDX=COMPS.map(c=>({c,name:c.n.toLowerCase(),text:c.b?norm([c.b.comp,c.b.pkg,c.b.desc,c.b.pn,c.b.mfr].join(' ')):''}));
+const key=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
+const IDX=COMPS.map(c=>({c,name:c.n.toLowerCase(),k:key(c.n),text:c.b?norm([c.b.comp,c.b.pkg,c.b.desc,c.b.pn,c.b.mfr].join(' ')):''}));
 function search(s){
-  s=s.trim(); if(!s) return COMPS.filter(c=>!c.miss).concat(COMPS.filter(c=>c.miss));
-  const n=s.toLowerCase(),t=norm(s);
-  const exact=IDX.filter(i=>i.name===n),pre=IDX.filter(i=>i.name!==n&&i.name.startsWith(n)),
-        txt=IDX.filter(i=>!i.name.startsWith(n)&&t.length>1&&i.text.includes(t));
-  return [...exact,...pre,...txt].map(i=>i.c);
+  s=s.trim(); if(!s) return COMPS.filter(c=>!c.miss&&!c.t).concat(COMPS.filter(c=>c.miss));
+  const n=s.toLowerCase(),t=norm(s),k=key(s);
+  const seen=new Set(),out=[],add=i=>{if(!seen.has(i)){seen.add(i);out.push(i)}};
+  IDX.filter(i=>i.name===n).forEach(add);
+  IDX.filter(i=>k&&i.k===k).forEach(add);
+  IDX.filter(i=>i.name.startsWith(n)||(k&&i.k.startsWith(k))).forEach(add);
+  if(t.length>1) IDX.filter(i=>i.text.includes(t)||(k.length>1&&i.c.t&&i.k.includes(k))).forEach(add);
+  return out.map(i=>i.c);
 }
 function imgKey(){if(mode==='photo'&&!hasPhoto(side))mode='draw';return mode==='draw'?'draw_'+side:mode==='photo'?'photo_'+side:'sch_'+schPage}
 function setImage(){
@@ -189,6 +193,7 @@ function showCard(c){
   if(!c){card.hidden=true;return}
   const b=c.b; let h=`<h2>${esc(c.n)}${c.s?`<span class="pill">${c.s} side</span>`:''}</h2><dl>`;
   if(b){h+=`<dt>Part</dt><dd>${esc(b.comp)}</dd><dt>Value</dt><dd>${esc(b.desc)}</dd>`+(b.pkg?`<dt>Package</dt><dd>${esc(b.pkg)}</dd>`:'')+`<dt>P/N</dt><dd>${esc(b.mfr)} ${esc(b.pn)}</dd><dt>BOM</dt><dd>item ${esc(b.item)}, PDF page ${esc(b.page)}</dd>`}
+  else if(c.t) h+=`<dt>Text</dt><dd>Printed on the board (not a part name)</dd>`;
   else if(/^TP/i.test(c.n)) h+=`<dt>Part</dt><dd>Test point</dd>`;
   else if(Object.keys(BOMINFO).length) h+=`<dt>Part</dt><dd>Printed on the board, not in the BOM (probably not fitted)</dd>`;
   if(!c.miss){
@@ -228,10 +233,10 @@ function select(c){
   const a=list.querySelector('button[aria-current="true"]'); if(a) a.scrollIntoView({block:'nearest'});
 }
 function renderList(items,typed){
-  const onb=COMPS.filter(c=>!c.miss).length;
-  $('count').textContent=typed?`${items.length} match${items.length===1?'':'es'}`:`${onb} labels on the board`+(COMPS.length>onb?` · ${COMPS.length-onb} BOM parts not found`:'');
+  const onb=COMPS.filter(c=>!c.miss&&!c.t).length,nt=COMPS.filter(c=>c.t).length,nm=COMPS.filter(c=>c.miss).length;
+  $('count').textContent=typed?`${items.length} match${items.length===1?'':'es'}`:`${onb} part names`+(nt?` · ${nt} other texts (type to search)`:'')+(nm?` · ${nm} BOM parts not found`:'');
   if(!items.length){list.innerHTML=`<li class="empty">Nothing matches “${esc(q.value)}”.</li>`;return}
-  list.innerHTML=items.map(c=>`<li><button data-i="${COMPS.indexOf(c)}"><span class="nm">${esc(c.n)}</span><span class="d">${c.b?esc(c.b.desc):(/^TP/i.test(c.n)?'test point':'')}</span><span class="sd${c.miss?' miss':''}">${c.miss?'not found':c.s==='top'?'top':'bot'}</span></button></li>`).join('');
+  list.innerHTML=items.map(c=>`<li><button data-i="${COMPS.indexOf(c)}"><span class="nm">${esc(c.n)}</span><span class="d">${c.b?esc(c.b.desc):c.t?'printed text':(/^TP/i.test(c.n)?'test point':'')}</span><span class="sd${c.miss?' miss':''}">${c.miss?'not found':c.s==='top'?'top':'bot'}</span></button></li>`).join('');
 }
 list.addEventListener('click',e=>{const b=e.target.closest('button');if(b)select(COMPS[+b.dataset.i])});
 q.addEventListener('input',()=>{
