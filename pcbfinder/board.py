@@ -5,6 +5,39 @@ import cv2
 import pymupdf
 
 
+def drawing_extent(page, seed):
+    """the drawn content that touches the labels' area, grown until nothing more joins it"""
+    pr = page.rect
+    z = 2.0
+    pm = page.get_pixmap(matrix=pymupdf.Matrix(z, z), alpha=False)
+    im = np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width, 3)
+    ink = (im.min(axis=2) < 225).astype(np.uint8)
+    gap = max(3, int(0.012 * max(pr.width, pr.height) * z))       # pieces closer than this belong together
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * gap + 1, 2 * gap + 1))
+    n, lbl, st, _ = cv2.connectedComponentsWithStats(cv2.dilate(ink, k), connectivity=8)
+    comps = []
+    for i in range(1, n):
+        x, y, w, h, a = st[i]
+        bx = (pr.x0 + (x + gap) / z, pr.y0 + (y + gap) / z, pr.x0 + (x + w - gap) / z, pr.y0 + (y + h - gap) / z)
+        if (bx[2] - bx[0]) > 0.9 * pr.width and (bx[3] - bx[1]) > 0.9 * pr.height:
+            continue                                                  # the page frame (spans the whole page)
+        comps.append(bx)
+    box = tuple(seed)
+    for _ in range(6):
+        grow = box
+        for c in comps:
+            if c[0] <= box[2] and c[2] >= box[0] and c[1] <= box[3] and c[3] >= box[1]:
+                grow = (min(grow[0], c[0]), min(grow[1], c[1]), max(grow[2], c[2]), max(grow[3], c[3]))
+        if grow == box:
+            break
+        box = grow
+    # never swallow most of the page (title block, notes): then stay with the labels' area
+    if (box[2] - box[0]) * (box[3] - box[1]) > 0.8 * pr.width * pr.height:
+        m = 0.04 * max(seed[2] - seed[0], seed[3] - seed[1])
+        box = (seed[0] - m, seed[1] - m, seed[2] + m, seed[3] + m)
+    return box
+
+
 def board_clip(page, labels):
     """Board rectangle on the page: the smallest drawn outline that contains every label."""
     # ignore stray labels far from the crowd (title block text)
@@ -34,8 +67,9 @@ def board_clip(page, labels):
             ba, best = a, bx
     outline = best is not None
     if best is None:
-        m = 0.04 * max(xs1 - xs0, ys1 - ys0)
-        best = (xs0 - m, ys0 - m, xs1 + m, ys1 + m)
+        # no closed board outline: take everything drawn around the labels (parts, pads, logos, the
+        # partial outline), not just the box around the names, so the whole side of the board shows
+        best = drawing_extent(page, (xs0, ys0, xs1, ys1))
     pad = 4
     clip = (max(pr.x0, best[0] - pad), max(pr.y0, best[1] - pad), min(pr.x1, best[2] + pad), min(pr.y1, best[3] + pad))
     return clip, best, outline
