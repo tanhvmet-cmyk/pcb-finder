@@ -80,6 +80,26 @@ Không dùng agent: Terminal → Run Task → chọn **PCB Finder: build page fr
 Bộ kiểm tra (thư mục `test-cases/`) chỉ nằm trên máy, không bao giờ đưa lên GitHub.
 Thêm một file đã chạy đúng vào bộ kiểm tra: `python check.py add "đường dẫn file.pdf"`.
 
+## Kéo PDF vào trang web để xem dòng điện (không cần Python)
+
+Mở file **`flow-viewer.html`** bằng Chrome hoặc Edge, rồi kéo file PDF schematic vào (hoặc bấm để chọn file).
+Mọi thứ chạy ngay trong trình duyệt, không cần cài gì, không cần mạng, file không bị gửi đi đâu.
+
+- **Bấm vào một dây**: cả net của dây đó sáng lên. Bảng bên phải cho biết tên net và các linh kiện nối vào.
+- **Vẽ đường dòng điện**: gõ chuỗi nhãn và linh kiện theo thứ tự dòng chạy, ví dụ `ACL F1 D1 R1 D4 NTC1 ACN`,
+  rồi bấm **Vẽ**. Dòng điện chạy theo đúng dây thật; đoạn đi xuyên qua linh kiện là nét chấm. Có thể bấm vào
+  linh kiện trên sơ đồ để thêm nó vào chuỗi. Vẽ được nhiều đường, mỗi đường một màu; trang nhớ các đường cho lần sau.
+- **Tìm**: gõ R12, C5, VCC… để nhảy tới chỗ đó.
+- **Lưu HTML**: lưu một file HTML gồm sơ đồ và các đường đã vẽ, gửi cho người khác mở là xem được.
+
+Đọc tốt: PDF vector có chữ thật (bôi đen chữ được), ví dụ PDF in từ Altium. Hai nhãn cùng tên (VCC, GND…) được
+coi là nối với nhau. Không đọc được: ảnh scan, hoặc PDF mà chữ được vẽ bằng nét (khi đó vẫn bấm dây để xem net
+được, nhưng không tìm được tên linh kiện). Chân linh kiện được đoán theo đầu dây gần tên linh kiện nhất, nên mạch
+dày có thể sai vài chỗ: nếu đường vẽ sai, thêm linh kiện trung gian vào chuỗi.
+
+Sửa trang: sửa `flow-viewer/app.html` rồi chạy `python flow-viewer/build_page.py flow-viewer/app.html pdf.min.js pdf.worker.min.js flow-viewer.html`
+(pdf.js 3.11.174, lấy từ gói npm `pdfjs-dist@3.11.174`, thư mục `build/`).
+
 ## Dòng điện chạy trên schematic (current flow)
 
     python paths.py "đường dẫn file.pdf"
@@ -141,6 +161,7 @@ lower-case "Fuse1"). All 83 bottom-side test points were right.
 
 - `build.py` - the command you run (`--report r.json` writes the numbers and warnings)
 - `check.py` - re-runs saved test PDFs and reports anything that got worse (labels and netlist)
+- `flow-viewer.html` - drag a PDF onto this page in the browser: nets, typed current paths, search (source in `flow-viewer/`)
 - `paths.py` - current flow on the schematic; `pcbfinder/schgraph.py` reads wires, pins and labels, `pcbfinder/flowview.py` + `pcbfinder/flow.html` make the page; `pcbfinder/nets.py` traces the board copper (checks the flows)
 - `.github/agents/pcb-finder.agent.md` - the Copilot agent
 - `pcbfinder/labels.py` - finding and reading the labels, choosing the layout pages
